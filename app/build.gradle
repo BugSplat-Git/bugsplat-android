@@ -1,0 +1,78 @@
+plugins {
+    id 'com.android.library'
+}
+
+android {
+    namespace 'com.bugsplat.android'
+    compileSdk 35
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 35
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    packagingOptions {
+        resources {
+            excludes += ['*/arm64-v8a/*.so', '*/x86_64/*.so']
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/cpp/crashpad/lib']
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+
+    ndkVersion '27.2.12479018'
+}
+
+dependencies {
+    implementation libs.androidx.core.ktx
+    implementation libs.androidx.appcompat
+    implementation libs.material
+    implementation libs.androidx.constraintlayout
+    testImplementation libs.junit
+    androidTestImplementation libs.androidx.junit
+    androidTestImplementation libs.androidx.espresso.core
+}
+
+afterEvaluate {
+    android.libraryVariants.all { variant ->
+        def bundleTask = tasks.named("bundle${variant.name.capitalize()}Aar")
+        bundleTask.configure {
+            def aarOutputDir = file("${buildDir}/outputs/aar")
+            def originalAarName = "app-${variant.name}.aar"
+            def newAarName = "bugsplat-android-${variant.name}.aar"
+            def originalFile = file("$aarOutputDir/$originalAarName")
+            def newFile = file("$aarOutputDir/$newAarName")
+
+            doLast {
+                if (originalFile.exists()) {
+                    originalFile.renameTo(newFile)
+                }
+            }
+        }
+    }
+}
