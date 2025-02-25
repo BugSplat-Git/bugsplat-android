@@ -14,32 +14,16 @@ public class BugSplatBridge {
     private BugSplatBridge() {
     }
 
-    // Singleton instance
-    private static final BugSplatBridge INSTANCE = new BugSplatBridge();
-
-    // Public method to get the singleton instance
-    public static BugSplatBridge getInstance() {
-        return INSTANCE;
-    }
-
-    public void initBugSplat(Activity activity, String database, String application, String version) {
+    public static void initBugSplat(Activity activity, String database, String application, String version) {
         ApplicationInfo applicationInfo = activity.getApplicationInfo();
         Log.d("BugSplat", "init result: " +
-                jniInitBugSplat(
-                    applicationInfo.dataDir,
-                    applicationInfo.nativeLibraryDir,
-                    database,
-                    application,
-                    version
-                )
-        );
+                jniInitBugSplat(applicationInfo.dataDir, applicationInfo.nativeLibraryDir, database, application, version));
     }
 
-    public void crash() {
+    public static void crash() {
         jniCrash();
     }
 
-    // Native method declarations
-    public native boolean jniInitBugSplat(String dataDir, String libDir, String database, String application, String version);
-    public native void jniCrash();
+    static native boolean jniInitBugSplat(String dataDir, String libDir, String database, String application, String version);
+    static native void jniCrash();
 }
