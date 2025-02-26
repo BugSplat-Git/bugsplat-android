@@ -1,3 +1,4 @@
+#include <android/log.h>
 #include <jni.h>
 #include <string>
 #include <unistd.h>
@@ -30,6 +31,7 @@ Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass cla
 
     // Crashpad upload URL for BugSplat database
     string url = "https://" + databaseString + ".bugsplat.com/post/bp/crash/crashpad.php";
+    __android_log_print(ANDROID_LOG_INFO, "bugsplat-android", "Url: %s", url.c_str());
 
     // Crashpad annotations
     map<string, string> annotations;
@@ -58,8 +60,12 @@ Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass cla
     vector<FilePath> attachments;
     // Start Crashpad crash handler
     static auto *client = new CrashpadClient();
-    return client->StartHandlerAtCrash(handler, reportsDir, metricsDir, url, annotations,
+    bool result = client->StartHandlerAtCrash(handler, reportsDir, metricsDir, url, annotations,
                                 arguments, attachments);
+
+    __android_log_print(ANDROID_LOG_INFO, "bugsplat-android", "StartHandlerAtCrash result: %s", result ? "success" : "fail");
+
+    return result;
 }
 extern "C"
 JNIEXPORT void JNICALL
