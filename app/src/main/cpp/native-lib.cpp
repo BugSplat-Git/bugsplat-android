@@ -10,14 +10,15 @@ using namespace base;
 using namespace crashpad;
 using namespace std;
 
-extern "C"
-JNIEXPORT jboolean JNICALL
+extern "C" JNIEXPORT jboolean JNICALL
 Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass clazz,
-                                                                       jstring data_dir,
-                                                                       jstring lib_dir,
-                                                                       jstring database,
-                                                                       jstring application,
-                                                                       jstring version) {
+                                                         jstring data_dir,
+                                                         jstring lib_dir,
+                                                         jstring database,
+                                                         jstring application,
+                                                         jstring version,
+                                                         jobjectArray attachments)
+{
 
     string dataDir = env->GetStringUTFChars(data_dir, nullptr);
     string libDir = env->GetStringUTFChars(lib_dir, nullptr);
@@ -46,7 +47,7 @@ Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass cla
 
     // Crashpad local database
     unique_ptr<CrashReportDatabase> crashReportDatabase = CrashReportDatabase::Initialize(
-            reportsDir);
+        reportsDir);
     if (crashReportDatabase == nullptr)
         return false;
 
@@ -56,19 +57,33 @@ Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass cla
         return false;
     settings->SetUploadsEnabled(true);
 
-    // File paths of attachments to be uploaded with the minidump file at crash time - default bundle limit is 20MB
-    vector<FilePath> attachments;
+    // Process attachments
+    vector<FilePath> attachmentPaths;
+    if (attachments != nullptr)
+    {
+        jsize length = env->GetArrayLength(attachments);
+        for (jsize i = 0; i < length; i++)
+        {
+            jstring path = (jstring)env->GetObjectArrayElement(attachments, i);
+            const char *pathStr = env->GetStringUTFChars(path, nullptr);
+            attachmentPaths.push_back(FilePath(pathStr));
+            env->ReleaseStringUTFChars(path, pathStr);
+            env->DeleteLocalRef(path);
+        }
+    }
+
     // Start Crashpad crash handler
     static auto *client = new CrashpadClient();
     bool result = client->StartHandlerAtCrash(handler, reportsDir, metricsDir, url, annotations,
-                                arguments, attachments);
+                                              arguments, attachmentPaths);
 
     __android_log_print(ANDROID_LOG_INFO, "bugsplat-android", "StartHandlerAtCrash result: %s", result ? "success" : "fail");
 
     return result;
 }
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_bugsplat_android_BugSplatBridge_jniCrash(JNIEnv *env, jclass clazz) {
-    *(volatile int *) nullptr = 0;
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_bugsplat_android_BugSplatBridge_jniCrash(JNIEnv *env, jclass clazz)
+{
+    *(volatile int *)nullptr = 0;
 }
