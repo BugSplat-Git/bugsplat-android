@@ -20,6 +20,7 @@ set_property(TARGET crashpad_handler PROPERTY IMPORTED_LOCATION ${PROJECT_SOURCE
 include_directories(
         ${PROJECT_SOURCE_DIR}/crashpad/include/
         ${PROJECT_SOURCE_DIR}/crashpad/include/third_party/mini_chromium/mini_chromium/
+        ${PROJECT_SOURCE_DIR}/app/src/main/cpp/
 )
 
 find_library(log-lib log)
