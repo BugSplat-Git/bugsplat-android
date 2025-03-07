@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">BugSplat Example</string>
+    <string name="crash_button">Crash App</string>
+</resources> 

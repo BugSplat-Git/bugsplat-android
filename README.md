@@ -127,9 +127,88 @@ curl -sL -O  "https://app.bugsplat.com/download/symbol-upload-linux" && chmod +x
 
 Please refer to our [documentation](https://docs.bugsplat.com/education/faq/how-to-upload-symbol-files-with-symbol-upload) to learn more about how to use `symbol-upload`.
 
+### Native Library Deployment
+
+When integrating BugSplat into your Android application, it's crucial to ensure that the native libraries (.so files) are properly deployed to the device. Here are the necessary configurations to include in your app's build.gradle file:
+
+1. **Match ABI Filters**
+   
+   Ensure your app uses the same ABI filters as the BugSplat library:
+   ```gradle
+   android {
+       defaultConfig {
+           ndk {
+               abiFilters 'arm64-v8a', 'x86_64', 'armeabi-v7a'
+           }
+       }
+   }
+   ```
+
+2. **Prevent Symbol Stripping**
+   
+   Configure packaging options to prevent stripping debug symbols from native libraries:
+   ```gradle
+   android {
+       packagingOptions {
+           jniLibs {
+               keepDebugSymbols += ['**/*.so']
+               useLegacyPackaging = true
+           }
+           doNotStrip '**/*.so'
+       }
+   }
+   ```
+
+3. **Enable Native Library Extraction**
+   
+   Add the following to your AndroidManifest.xml to ensure native libraries are extracted:
+   ```xml
+   <application
+       android:extractNativeLibs="true"
+       ... >
+   ```
+
+4. **Enable JNI Debugging (for development)**
+   
+   For development and testing, enable JNI debugging in your debug build type:
+   ```gradle
+   android {
+       buildTypes {
+           debug {
+               jniDebuggable true
+           }
+       }
+   }
+   ```
+
+5. **Add Storage Permissions (if needed)**
+   
+   If your app needs to save crash dumps to external storage:
+   ```xml
+   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+   ```
+
+These configurations ensure that the BugSplat native libraries are properly included in your app and can function correctly to capture and report native crashes.
+
 ## Sample Applications 🧑‍🏫
 
-Coming soon!
+### Example App
+
+The repository includes an example app that demonstrates how to use the BugSplat Android SDK. The example app is located in the `example` directory.
+
+To run the example app:
+
+1. Open the project in Android Studio
+2. Select "Example App" from the run configuration dropdown in the toolbar
+3. Click the run button to build and run the app on your device or emulator
+
+The example app demonstrates:
+- Automatically initializing the BugSplat SDK at app startup
+- Triggering a crash for testing purposes
+- Handling errors during initialization
+
+For more information, see the [Example App README](example/README.md).
 
 ## Contributing 🤝
 
