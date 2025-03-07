@@ -173,7 +173,7 @@ task uploadBugSplatSymbols {
             "-v", project.ext.bugsplatAppVersion,
             "-d", nativeLibsDirFile.absolutePath,
             "-f", "**/*.so",
-            "-m"  // Enable multi-threading
+            "-m"  // Run dumpsyms
         ]
         
         // Add client credentials if provided
