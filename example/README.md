@@ -9,7 +9,7 @@ There are two ways to run the example app:
 ### Option 1: Using the Run Configuration
 
 1. Open the project in Android Studio
-2. Select "Example App" from the run configuration dropdown in the toolbar
+2. Select `example` from the run configuration dropdown in the toolbar
 3. Click the run button (green triangle) to build and run the app on your device or emulator
 
 ### Option 2: Using Gradle
@@ -29,9 +29,13 @@ You can also build and install the example app using Gradle:
 
 ## Using the Example App
 
+> [!WARN]
+> Do not attach a debugger when testing crash reporting functionality. The debugger will intercept crashes before they can be caught and reported by BugSplat, preventing proper testing of the crash reporting system.
+
 The example app automatically initializes BugSplat when it starts. You can:
 
 1. Press the "Crash App" button to trigger a crash and test the crash reporting functionality
+2. Navigate the to [BugSplat Dashboard](https://app.bugsplat.com/v2/dashboard) to view your crash reports
 
 ## Configuration
 
@@ -53,7 +57,7 @@ ext {
 
 ### Important: API Credentials for Symbol Upload
 
-Symbol upload requires authentication with BugSplat API credentials. You must provide both `bugsplatClientId` and `bugsplatClientSecret` in your build.gradle file:
+Symbol upload requires authentication with BugSplat OAuth credentials which can be created on the [Integrations](https://app.bugsplat.com/v2/database/integrations#oauth) page. You must provide both `bugsplatClientId` and `bugsplatClientSecret` in your build.gradle file:
 
 ```gradle
 ext {
@@ -86,15 +90,6 @@ These values are then:
 1. Used by the MainActivity to initialize BugSplat
 2. Used by the symbol upload task to upload debug symbols
 3. Automatically kept in sync with the app's version
-
-## Debugging
-
-To debug the example app and the library code:
-
-1. Set breakpoints in the library code
-2. Select the "Example App" run configuration
-3. Click the debug button (bug icon) instead of the run button
-4. The debugger will stop at your breakpoints, allowing you to step through the code
 
 ## Uploading Debug Symbols
 

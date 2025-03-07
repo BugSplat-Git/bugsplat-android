@@ -215,7 +215,7 @@ Invoke-WebRequest -Uri "https://app.bugsplat.com/download/symbol-upload-windows.
 curl -sL -O  "https://app.bugsplat.com/download/symbol-upload-linux" && chmod +x symbol-upload-linux
 
 # Upload symbols
-./symbol-upload -b DATABASE -a APPLICATION -v VERSION -i CLIENT_ID -s CLIENT_SECRET -d NATIVE_LIBS_DIR -f "**/*.so" -m
+./symbol-upload-macos -b DATABASE -a APPLICATION -v VERSION -i CLIENT_ID -s CLIENT_SECRET -d NATIVE_LIBS_DIR -f "**/*.so" -m
 ```
 
 The `-d` argument specifies the directory containing the native libraries, and the `-f` argument specifies a glob pattern to find all the symbol files. The `-m` flag enables multi-threading for faster uploads.
