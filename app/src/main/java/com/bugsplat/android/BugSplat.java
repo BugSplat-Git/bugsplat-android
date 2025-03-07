@@ -1,6 +1,7 @@
 package com.bugsplat.android;
 
 import android.app.Activity;
+import android.content.Context;
 import java.util.Map;
 
 /**
@@ -66,5 +67,73 @@ public class BugSplat {
      */
     public static void crash() {
         BugSplatBridge.crash();
+    }
+    
+    /**
+     * Upload debug symbols for native libraries (.so files) in the specified directory.
+     * This method runs asynchronously and returns immediately.
+     *
+     * @param context The application context
+     * @param database The BugSplat database name
+     * @param application The application name
+     * @param version The application version
+     * @param nativeLibsDir The directory containing the native libraries
+     */
+    public static void uploadSymbols(Context context, String database, String application, String version, String nativeLibsDir) {
+        SymbolUploader uploader = new SymbolUploader(database, application, version);
+        uploader.uploadSymbols(context, nativeLibsDir);
+    }
+    
+    /**
+     * Upload debug symbols for native libraries (.so files) in the specified directory.
+     * This method runs asynchronously and returns immediately.
+     *
+     * @param context The application context
+     * @param database The BugSplat database name
+     * @param application The application name
+     * @param version The application version
+     * @param clientId The BugSplat API client ID
+     * @param clientSecret The BugSplat API client secret
+     * @param nativeLibsDir The directory containing the native libraries
+     */
+    public static void uploadSymbols(Context context, String database, String application, String version, 
+                                    String clientId, String clientSecret, String nativeLibsDir) {
+        SymbolUploader uploader = new SymbolUploader(database, application, version, clientId, clientSecret);
+        uploader.uploadSymbols(context, nativeLibsDir);
+    }
+    
+    /**
+     * Upload debug symbols for native libraries (.so files) in the specified directory.
+     * This method blocks until the upload is complete.
+     *
+     * @param context The application context
+     * @param database The BugSplat database name
+     * @param application The application name
+     * @param version The application version
+     * @param nativeLibsDir The directory containing the native libraries
+     * @throws java.io.IOException If an I/O error occurs
+     */
+    public static void uploadSymbolsBlocking(Context context, String database, String application, String version, String nativeLibsDir) throws java.io.IOException {
+        SymbolUploader uploader = new SymbolUploader(database, application, version);
+        uploader.uploadSymbolsBlocking(context, nativeLibsDir);
+    }
+    
+    /**
+     * Upload debug symbols for native libraries (.so files) in the specified directory.
+     * This method blocks until the upload is complete.
+     *
+     * @param context The application context
+     * @param database The BugSplat database name
+     * @param application The application name
+     * @param version The application version
+     * @param clientId The BugSplat API client ID
+     * @param clientSecret The BugSplat API client secret
+     * @param nativeLibsDir The directory containing the native libraries
+     * @throws java.io.IOException If an I/O error occurs
+     */
+    public static void uploadSymbolsBlocking(Context context, String database, String application, String version,
+                                           String clientId, String clientSecret, String nativeLibsDir) throws java.io.IOException {
+        SymbolUploader uploader = new SymbolUploader(database, application, version, clientId, clientSecret);
+        uploader.uploadSymbolsBlocking(context, nativeLibsDir);
     }
 } 

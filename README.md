@@ -106,24 +106,119 @@ BugSplatBridge.initBugSplat(this, "fred", "my-android-crasher", "2.0.0", attribu
 
 ### Symbol Upload
 
-To symbolicate crash reports, you must upload your app's `.so` files to the BugSplat backend. There are scripts to help with this.
+To symbolicate crash reports, you must upload your app's `.so` files to the BugSplat backend. The BugSplat Android SDK provides two ways to upload symbols:
 
-Download BugSplat's cross-platform tool, [symbol-upload](https://docs.bugsplat.com/education/faq/how-to-upload-symbol-files-with-symbol-upload) by entering the following command in your terminal.
+#### 1. Using the Built-in Symbol Uploader
 
-macOS
+The BugSplat Android SDK includes a built-in symbol uploader that can be used to upload symbols programmatically:
+
+```java
+// Upload symbols asynchronously
+BugSplat.uploadSymbols(context, "YourDatabase", "YourApp", "1.0.0", nativeLibsDir);
+
+// Or with client credentials (recommended for production)
+BugSplat.uploadSymbols(context, "YourDatabase", "YourApp", "1.0.0", 
+                      "your_client_id", "your_client_secret", nativeLibsDir);
+
+// Or upload symbols synchronously (blocking)
+try {
+    BugSplat.uploadSymbolsBlocking(context, "YourDatabase", "YourApp", "1.0.0", nativeLibsDir);
+    
+    // Or with client credentials
+    BugSplat.uploadSymbolsBlocking(context, "YourDatabase", "YourApp", "1.0.0",
+                                  "your_client_id", "your_client_secret", nativeLibsDir);
+} catch (IOException e) {
+    Log.e("YourApp", "Failed to upload symbols", e);
+}
+```
+
+This approach requires the `symbol-upload` executable to be included in your app's assets directory. See the [Example App README](example/README.md) for more details on how to set this up.
+
+#### 2. Using Gradle Build Tasks
+
+You can also add a Gradle task to your build process to automatically upload symbols when you build your app. Here's an example of how to set this up:
+
+```gradle
+// BugSplat configuration
+ext {
+    bugsplatDatabase = "your_database_name" // Replace with your BugSplat database name
+    bugsplatAppName = "your_app_name"       // Replace with your application name
+    bugsplatAppVersion = android.defaultConfig.versionName
+    // Optional: Add your BugSplat API credentials for symbol upload
+    bugsplatClientId = ""     // Replace with your BugSplat API client ID (optional)
+    bugsplatClientSecret = "" // Replace with your BugSplat API client secret (optional)
+}
+
+// Task to upload debug symbols for native libraries
+task uploadBugSplatSymbols {
+    doLast {
+        // Path to the merged native libraries
+        def nativeLibsDir = "${buildDir}/intermediates/merged_native_libs/debug/out/lib"
+        
+        // Check if the directory exists
+        def nativeLibsDirFile = file(nativeLibsDir)
+        if (!nativeLibsDirFile.exists()) {
+            logger.warn("Native libraries directory not found: ${nativeLibsDir}")
+            return
+        }
+        
+        // Path to the symbol-upload executable
+        def symbolUploadPath = "path/to/symbol-upload" // Adjust this path
+        
+        // Build the command with the directory and glob pattern
+        def command = [
+            symbolUploadPath,
+            "-b", project.ext.bugsplatDatabase,
+            "-a", project.ext.bugsplatAppName,
+            "-v", project.ext.bugsplatAppVersion,
+            "-d", nativeLibsDirFile.absolutePath,
+            "-f", "**/*.so",
+            "-m"  // Enable multi-threading
+        ]
+        
+        // Add client credentials if provided
+        if (project.ext.has('bugsplatClientId') && project.ext.bugsplatClientId) {
+            command.add("-i")
+            command.add(project.ext.bugsplatClientId)
+            command.add("-s")
+            command.add(project.ext.bugsplatClientSecret)
+        }
+        
+        // Execute the command
+        // ... (see example app for full implementation)
+    }
+}
+
+// Run the symbol upload task after the assembleDebug task
+tasks.whenTaskAdded { task ->
+    if (task.name == 'assembleDebug') {
+        task.finalizedBy(uploadBugSplatSymbols)
+    }
+}
+```
+
+See the [Example App README](example/README.md) for a complete implementation of this approach.
+
+#### 3. Using the Command-Line Tool
+
+You can also use BugSplat's cross-platform tool, [symbol-upload](https://docs.bugsplat.com/education/faq/how-to-upload-symbol-files-with-symbol-upload) directly from the command line:
+
 ```sh
+# Download the symbol-upload tool
+# macOS
 curl -sL -O "https://octomore.bugsplat.com/download/symbol-upload-macos" && chmod +x symbol-upload-macos
-```
 
-Windows
-```ps1
+# Windows
 Invoke-WebRequest -Uri "https://app.bugsplat.com/download/symbol-upload-windows.exe" -OutFile "symbol-upload-windows.exe"
+
+# Linux
+curl -sL -O  "https://app.bugsplat.com/download/symbol-upload-linux" && chmod +x symbol-upload-linux
+
+# Upload symbols
+./symbol-upload -b DATABASE -a APPLICATION -v VERSION -i CLIENT_ID -s CLIENT_SECRET -d NATIVE_LIBS_DIR -f "**/*.so" -m
 ```
 
-Linux
-```sh
-curl -sL -O  "https://app.bugsplat.com/download/symbol-upload-linux" && chmod +x symbol-upload-linux
-```
+The `-d` argument specifies the directory containing the native libraries, and the `-f` argument specifies a glob pattern to find all the symbol files. The `-m` flag enables multi-threading for faster uploads.
 
 Please refer to our [documentation](https://docs.bugsplat.com/education/faq/how-to-upload-symbol-files-with-symbol-upload) to learn more about how to use `symbol-upload`.
 

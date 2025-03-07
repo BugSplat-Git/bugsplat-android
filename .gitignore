@@ -15,3 +15,6 @@
 local.properties
 build.log
 example/build
+symbol-upload-linux
+symbol-upload-macos
+symbol-upload-windows.exe

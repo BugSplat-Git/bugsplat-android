@@ -100,12 +100,25 @@ public class MainActivity extends AppCompatActivity {
 
     private void initializeBugSplat() {
         try {
+            // Log BugSplat configuration from BuildConfig
+            Log.d(TAG, "BugSplat Configuration:");
+            Log.d(TAG, "  Database: " + BuildConfig.BUGSPLAT_DATABASE);
+            Log.d(TAG, "  Application: " + BuildConfig.BUGSPLAT_APP_NAME);
+            Log.d(TAG, "  Version: " + BuildConfig.BUGSPLAT_APP_VERSION);
+            
             Log.d(TAG, "Initializing BugSplat...");
-            // Initialize BugSplat with your database, application, and version
-            BugSplat.init(this, "fred", "my-android-crasher", "1.0.0");
+            // Initialize BugSplat with values from BuildConfig
+            BugSplat.init(this, 
+                          BuildConfig.BUGSPLAT_DATABASE, 
+                          BuildConfig.BUGSPLAT_APP_NAME, 
+                          BuildConfig.BUGSPLAT_APP_VERSION);
             
             // Update UI
-            statusTextView.setText("Status: BugSplat initialized");
+            String statusText = String.format("Status: BugSplat initialized\nDatabase: %s\nApp: %s\nVersion: %s",
+                                             BuildConfig.BUGSPLAT_DATABASE,
+                                             BuildConfig.BUGSPLAT_APP_NAME,
+                                             BuildConfig.BUGSPLAT_APP_VERSION);
+            statusTextView.setText(statusText);
             Toast.makeText(this, "BugSplat initialized successfully", Toast.LENGTH_SHORT).show();
             Log.d(TAG, "BugSplat initialized successfully");
         } catch (UnsatisfiedLinkError e) {
