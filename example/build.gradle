@@ -1,0 +1,322 @@
+plugins {
+    id 'com.android.application'
+}
+
+// BugSplat configuration - Define at the top level so it can be used throughout the build file
+ext {
+    bugsplatDatabase = "fred" // Replace with your BugSplat database name
+    bugsplatAppName = "my-android-crasher" // Replace with your application name
+    bugsplatAppVersion = "1.0.0" // Can be overridden by versionName below
+    // Optional: Add your BugSplat API credentials for symbol upload
+    bugsplatClientId = ""     // Replace with your BugSplat API client ID (optional)
+    bugsplatClientSecret = "" // Replace with your BugSplat API client secret (optional)
+}
+
+android {
+    namespace 'com.bugsplat.example'
+    compileSdk 35
+
+    // Enable BuildConfig generation
+    buildFeatures {
+        buildConfig true
+    }
+
+    defaultConfig {
+        applicationId "com.bugsplat.example"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Match the ABI filters from the library
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64', 'armeabi-v7a'
+        }
+        
+        // Update BugSplat version to match app version if needed
+        if (project.ext.bugsplatAppVersion != versionName) {
+            project.ext.bugsplatAppVersion = versionName
+        }
+        
+        // Add BugSplat configuration to BuildConfig
+        buildConfigField "String", "BUGSPLAT_DATABASE", "\"${project.ext.bugsplatDatabase}\""
+        buildConfigField "String", "BUGSPLAT_APP_NAME", "\"${project.ext.bugsplatAppName}\""
+        buildConfigField "String", "BUGSPLAT_APP_VERSION", "\"${project.ext.bugsplatAppVersion}\""
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+            debuggable true
+            jniDebuggable true
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    // Ensure native libraries are not stripped
+    packagingOptions {
+        jniLibs {
+            keepDebugSymbols += ['**/*.so']
+            useLegacyPackaging = true
+        }
+        doNotStrip '**/*.so'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    // Depend on the library module
+    implementation project(':app')
+    
+    // Standard Android dependencies
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
+
+// Task to download the symbol-upload executable if it doesn't exist
+task downloadSymbolUpload {
+    doLast {
+        def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+        def isMac = System.getProperty("os.name").toLowerCase().contains("mac")
+        def isLinux = System.getProperty("os.name").toLowerCase().contains("linux")
+        
+        def downloadUrl
+        def executableName
+        def executableFile
+        
+        if (isWindows) {
+            downloadUrl = "https://app.bugsplat.com/download/symbol-upload-windows.exe"
+            executableName = "symbol-upload-windows.exe"
+            executableFile = file("${rootProject.projectDir}/${executableName}")
+        } else if (isMac) {
+            downloadUrl = "https://app.bugsplat.com/download/symbol-upload-macos"
+            executableName = "symbol-upload-macos"
+            executableFile = file("${rootProject.projectDir}/${executableName}")
+        } else if (isLinux) {
+            downloadUrl = "https://app.bugsplat.com/download/symbol-upload-linux"
+            executableName = "symbol-upload-linux"
+            executableFile = file("${rootProject.projectDir}/${executableName}")
+        } else {
+            throw new GradleException("Unsupported operating system for symbol-upload")
+        }
+        
+        // Check if the executable already exists
+        if (executableFile.exists()) {
+            logger.lifecycle("Symbol upload executable already exists at: ${executableFile.absolutePath}")
+            return
+        }
+        
+        // Download the executable
+        logger.lifecycle("Downloading symbol upload executable from: ${downloadUrl}")
+        
+        // Create a new URL and connection
+        def url = new URL(downloadUrl)
+        def connection = url.openConnection()
+        connection.setRequestProperty("User-Agent", "BugSplat-Android-Gradle-Plugin")
+        
+        // Download the file
+        executableFile.withOutputStream { outputStream ->
+            connection.inputStream.with { inputStream ->
+                outputStream << inputStream
+            }
+        }
+        
+        // Make the file executable (not needed for Windows)
+        if (!isWindows) {
+            executableFile.setExecutable(true)
+            logger.lifecycle("Made ${executableFile.absolutePath} executable")
+        }
+        
+        logger.lifecycle("Downloaded symbol upload executable to: ${executableFile.absolutePath}")
+    }
+}
+
+// Task to upload debug symbols for native libraries
+task uploadBugSplatSymbols {
+    doLast {
+        // Check if client credentials are provided
+        if (!project.ext.has('bugsplatClientId') || !project.ext.bugsplatClientId || 
+            !project.ext.has('bugsplatClientSecret') || !project.ext.bugsplatClientSecret) {
+            logger.warn("BugSplat API client credentials (clientId and clientSecret) are not provided.")
+            logger.warn("Symbol upload requires authentication. Please add the following to your build.gradle:")
+            logger.warn("ext {")
+            logger.warn("    bugsplatClientId = \"your_client_id\"")
+            logger.warn("    bugsplatClientSecret = \"your_client_secret\"")
+            logger.warn("}")
+            logger.warn("You can obtain these credentials from your BugSplat account.")
+            logger.warn("Skipping symbol upload.")
+            return
+        }
+        
+        // Get the current build variant and ABI
+        def buildType = System.getProperty("buildType") ?: "debug" // Default to debug if not specified
+        def currentAbi = System.getProperty("abi") ?: "arm64-v8a" // Default to arm64-v8a if not specified
+        
+        logger.lifecycle("Uploading symbols for build type: ${buildType}, ABI: ${currentAbi}")
+        
+        // Path to the merged native libraries for the current build type
+        def nativeLibsDir = "${buildDir}/intermediates/merged_native_libs/${buildType}/out/lib/${currentAbi}"
+        
+        // Check if the directory exists
+        def nativeLibsDirFile = file(nativeLibsDir)
+        if (!nativeLibsDirFile.exists()) {
+            logger.warn("Native libraries directory not found: ${nativeLibsDir}")
+            logger.warn("Skipping symbol upload")
+            return
+        }
+        
+        // Download the symbol-upload executable if needed
+        def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+        def isMac = System.getProperty("os.name").toLowerCase().contains("mac")
+        def isLinux = System.getProperty("os.name").toLowerCase().contains("linux")
+        
+        def downloadUrl
+        def executableName
+        def executableFile
+        
+        if (isWindows) {
+            downloadUrl = "https://app.bugsplat.com/download/symbol-upload-windows.exe"
+            executableName = "symbol-upload-windows.exe"
+            executableFile = file("${rootProject.projectDir}/${executableName}")
+        } else if (isMac) {
+            downloadUrl = "https://app.bugsplat.com/download/symbol-upload-macos"
+            executableName = "symbol-upload-macos"
+            executableFile = file("${rootProject.projectDir}/${executableName}")
+        } else if (isLinux) {
+            downloadUrl = "https://app.bugsplat.com/download/symbol-upload-linux"
+            executableName = "symbol-upload-linux"
+            executableFile = file("${rootProject.projectDir}/${executableName}")
+        } else {
+            logger.error("Unsupported operating system for symbol-upload")
+            logger.error("Skipping symbol upload")
+            return
+        }
+        
+        // Check if the executable already exists
+        if (!executableFile.exists()) {
+            // Download the executable
+            logger.lifecycle("Downloading symbol upload executable from: ${downloadUrl}")
+            
+            try {
+                // Create a new URL and connection
+                def url = new URL(downloadUrl)
+                def connection = url.openConnection()
+                connection.setRequestProperty("User-Agent", "BugSplat-Android-Gradle-Plugin")
+                
+                // Download the file
+                executableFile.withOutputStream { outputStream ->
+                    connection.inputStream.with { inputStream ->
+                        outputStream << inputStream
+                    }
+                }
+                
+                // Make the file executable (not needed for Windows)
+                if (!isWindows) {
+                    executableFile.setExecutable(true)
+                    logger.lifecycle("Made ${executableFile.absolutePath} executable")
+                }
+                
+                logger.lifecycle("Downloaded symbol upload executable to: ${executableFile.absolutePath}")
+            } catch (Exception e) {
+                logger.error("Failed to download symbol-upload executable: ${e.message}")
+                logger.error("Skipping symbol upload")
+                return
+            }
+        } else {
+            logger.lifecycle("Symbol upload executable already exists at: ${executableFile.absolutePath}")
+        }
+        
+        // Path to the symbol-upload executable
+        def symbolUploadPath = executableFile.absolutePath
+        
+        logger.lifecycle("Uploading symbols from directory: ${nativeLibsDir}")
+        
+        // Build the command with the directory and glob pattern
+        def command = [
+            symbolUploadPath,
+            "-b", project.ext.bugsplatDatabase,
+            "-a", project.ext.bugsplatAppName,
+            "-v", project.ext.bugsplatAppVersion,
+            "-d", nativeLibsDirFile.absolutePath,
+            "-f", "*.so", // Only match .so files directly in the ABI directory
+            "-m",  // Enable multi-threading
+            "-i", project.ext.bugsplatClientId,
+            "-s", project.ext.bugsplatClientSecret
+        ]
+        
+        // Execute the command
+        logger.lifecycle("Executing command: ${command.join(' ')}")
+        def process = command.execute()
+        def output = new StringBuilder()
+        def error = new StringBuilder()
+        
+        // Capture and log output in real-time
+        process.consumeProcessOutput(
+            { line -> 
+                output.append(line).append('\n')
+                logger.lifecycle("symbol-upload: ${line}")
+            } as Appendable,
+            { line -> 
+                error.append(line).append('\n')
+                logger.error("symbol-upload error: ${line}")
+            } as Appendable
+        )
+        
+        process.waitFor()
+        
+        if (process.exitValue() == 0) {
+            logger.lifecycle("Successfully uploaded symbols for ${buildType}/${currentAbi}")
+        } else {
+            logger.error("Failed to upload symbols, exit code: ${process.exitValue()}")
+            if (error.length() > 0) {
+                logger.error("Error output: ${error}")
+            }
+        }
+    }
+}
+
+// Define build types and ABIs
+def buildTypes = ['debug', 'release']
+def abiFilters = android.defaultConfig.ndk.abiFilters
+
+// Create tasks for each build type and ABI combination
+buildTypes.each { buildType ->
+    abiFilters.each { abi ->
+        tasks.register("uploadBugSplatSymbols${buildType.capitalize()}${abi.capitalize()}") {
+            dependsOn uploadBugSplatSymbols
+            doFirst {
+                System.setProperty("buildType", buildType)
+                System.setProperty("abi", abi)
+            }
+        }
+    }
+    
+    // Create a task to upload symbols for all ABIs for this build type
+    tasks.register("uploadBugSplatSymbols${buildType.capitalize()}AllAbis") {
+        dependsOn abiFilters.collect { abi ->
+            tasks.named("uploadBugSplatSymbols${buildType.capitalize()}${abi.capitalize()}")
+        }
+    }
+}
+
+// Run the symbol upload task after the assemble tasks
+tasks.whenTaskAdded { task ->
+    if (task.name == 'assembleDebug') {
+        task.finalizedBy(tasks.named("uploadBugSplatSymbolsDebugAllAbis"))
+    } else if (task.name == 'assembleRelease') {
+        task.finalizedBy(tasks.named("uploadBugSplatSymbolsReleaseAllAbis"))
+    }
+} 

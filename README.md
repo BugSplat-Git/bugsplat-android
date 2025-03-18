@@ -106,30 +106,204 @@ BugSplatBridge.initBugSplat(this, "fred", "my-android-crasher", "2.0.0", attribu
 
 ### Symbol Upload
 
-To symbolicate crash reports, you must upload your app's `.so` files to the BugSplat backend. There are scripts to help with this.
+To symbolicate crash reports, you must upload your app's `.so` files to the BugSplat backend. The BugSplat Android SDK provides two ways to upload symbols:
 
-Download BugSplat's cross-platform tool, [symbol-upload](https://docs.bugsplat.com/education/faq/how-to-upload-symbol-files-with-symbol-upload) by entering the following command in your terminal.
+#### 1. Using the Built-in Symbol Uploader
 
-macOS
+The BugSplat Android SDK includes a built-in symbol uploader that can be used to upload symbols programmatically:
+
+```java
+// Upload symbols asynchronously
+BugSplat.uploadSymbols(context, "YourDatabase", "YourApp", "1.0.0", nativeLibsDir);
+
+// Or with client credentials (recommended for production)
+BugSplat.uploadSymbols(context, "YourDatabase", "YourApp", "1.0.0", 
+                      "your_client_id", "your_client_secret", nativeLibsDir);
+
+// Or upload symbols synchronously (blocking)
+try {
+    BugSplat.uploadSymbolsBlocking(context, "YourDatabase", "YourApp", "1.0.0", nativeLibsDir);
+    
+    // Or with client credentials
+    BugSplat.uploadSymbolsBlocking(context, "YourDatabase", "YourApp", "1.0.0",
+                                  "your_client_id", "your_client_secret", nativeLibsDir);
+} catch (IOException e) {
+    Log.e("YourApp", "Failed to upload symbols", e);
+}
+```
+
+This approach requires the `symbol-upload` executable to be included in your app's assets directory. See the [Example App README](example/README.md) for more details on how to set this up.
+
+#### 2. Using Gradle Build Tasks
+
+You can also add a Gradle task to your build process to automatically upload symbols when you build your app. Here's an example of how to set this up:
+
+```gradle
+// BugSplat configuration
+ext {
+    bugsplatDatabase = "your_database_name" // Replace with your BugSplat database name
+    bugsplatAppName = "your_app_name"       // Replace with your application name
+    bugsplatAppVersion = android.defaultConfig.versionName
+    // Optional: Add your BugSplat API credentials for symbol upload
+    bugsplatClientId = ""     // Replace with your BugSplat API client ID (optional)
+    bugsplatClientSecret = "" // Replace with your BugSplat API client secret (optional)
+}
+
+// Task to upload debug symbols for native libraries
+task uploadBugSplatSymbols {
+    doLast {
+        // Path to the merged native libraries
+        def nativeLibsDir = "${buildDir}/intermediates/merged_native_libs/debug/out/lib"
+        
+        // Check if the directory exists
+        def nativeLibsDirFile = file(nativeLibsDir)
+        if (!nativeLibsDirFile.exists()) {
+            logger.warn("Native libraries directory not found: ${nativeLibsDir}")
+            return
+        }
+        
+        // Path to the symbol-upload executable
+        def symbolUploadPath = "path/to/symbol-upload" // Adjust this path
+        
+        // Build the command with the directory and glob pattern
+        def command = [
+            symbolUploadPath,
+            "-b", project.ext.bugsplatDatabase,
+            "-a", project.ext.bugsplatAppName,
+            "-v", project.ext.bugsplatAppVersion,
+            "-d", nativeLibsDirFile.absolutePath,
+            "-f", "**/*.so",
+            "-m"  // Run dumpsyms
+        ]
+        
+        // Add client credentials if provided
+        if (project.ext.has('bugsplatClientId') && project.ext.bugsplatClientId) {
+            command.add("-i")
+            command.add(project.ext.bugsplatClientId)
+            command.add("-s")
+            command.add(project.ext.bugsplatClientSecret)
+        }
+        
+        // Execute the command
+        // ... (see example app for full implementation)
+    }
+}
+
+// Run the symbol upload task after the assembleDebug task
+tasks.whenTaskAdded { task ->
+    if (task.name == 'assembleDebug') {
+        task.finalizedBy(uploadBugSplatSymbols)
+    }
+}
+```
+
+See the [Example App README](example/README.md) for a complete implementation of this approach.
+
+#### 3. Using the Command-Line Tool
+
+You can also use BugSplat's cross-platform tool, [symbol-upload](https://docs.bugsplat.com/education/faq/how-to-upload-symbol-files-with-symbol-upload) directly from the command line:
+
 ```sh
+# Download the symbol-upload tool
+# macOS
 curl -sL -O "https://octomore.bugsplat.com/download/symbol-upload-macos" && chmod +x symbol-upload-macos
-```
 
-Windows
-```ps1
+# Windows
 Invoke-WebRequest -Uri "https://app.bugsplat.com/download/symbol-upload-windows.exe" -OutFile "symbol-upload-windows.exe"
+
+# Linux
+curl -sL -O  "https://app.bugsplat.com/download/symbol-upload-linux" && chmod +x symbol-upload-linux
+
+# Upload symbols
+./symbol-upload-macos -b DATABASE -a APPLICATION -v VERSION -i CLIENT_ID -s CLIENT_SECRET -d NATIVE_LIBS_DIR -f "**/*.so" -m
 ```
 
-Linux
-```sh
-curl -sL -O  "https://app.bugsplat.com/download/symbol-upload-linux" && chmod +x symbol-upload-linux
-```
+The `-d` argument specifies the directory containing the native libraries, and the `-f` argument specifies a glob pattern to find all the symbol files. The `-m` flag enables multi-threading for faster uploads.
 
 Please refer to our [documentation](https://docs.bugsplat.com/education/faq/how-to-upload-symbol-files-with-symbol-upload) to learn more about how to use `symbol-upload`.
 
+### Native Library Deployment
+
+When integrating BugSplat into your Android application, it's crucial to ensure that the native libraries (.so files) are properly deployed to the device. Here are the necessary configurations to include in your app's build.gradle file:
+
+1. **Match ABI Filters**
+   
+   Ensure your app uses the same ABI filters as the BugSplat library:
+   ```gradle
+   android {
+       defaultConfig {
+           ndk {
+               abiFilters 'arm64-v8a', 'x86_64', 'armeabi-v7a'
+           }
+       }
+   }
+   ```
+
+2. **Prevent Symbol Stripping**
+   
+   Configure packaging options to prevent stripping debug symbols from native libraries:
+   ```gradle
+   android {
+       packagingOptions {
+           jniLibs {
+               keepDebugSymbols += ['**/*.so']
+               useLegacyPackaging = true
+           }
+           doNotStrip '**/*.so'
+       }
+   }
+   ```
+
+3. **Enable Native Library Extraction**
+   
+   Add the following to your AndroidManifest.xml to ensure native libraries are extracted:
+   ```xml
+   <application
+       android:extractNativeLibs="true"
+       ... >
+   ```
+
+4. **Enable JNI Debugging (for development)**
+   
+   For development and testing, enable JNI debugging in your debug build type:
+   ```gradle
+   android {
+       buildTypes {
+           debug {
+               jniDebuggable true
+           }
+       }
+   }
+   ```
+
+5. **Add Storage Permissions (if needed)**
+   
+   If your app needs to save crash dumps to external storage:
+   ```xml
+   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+   ```
+
+These configurations ensure that the BugSplat native libraries are properly included in your app and can function correctly to capture and report native crashes.
+
 ## Sample Applications 🧑‍🏫
 
-Coming soon!
+### Example App
+
+The repository includes an example app that demonstrates how to use the BugSplat Android SDK. The example app is located in the `example` directory.
+
+To run the example app:
+
+1. Open the project in Android Studio
+2. Select "Example App" from the run configuration dropdown in the toolbar
+3. Click the run button to build and run the app on your device or emulator
+
+The example app demonstrates:
+- Automatically initializing the BugSplat SDK at app startup
+- Triggering a crash for testing purposes
+- Handling errors during initialization
+
+For more information, see the [Example App README](example/README.md).
 
 ## Contributing 🤝
 

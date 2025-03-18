@@ -21,4 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "bugsplat-android"
 include(":app")
+include(":example")
  
