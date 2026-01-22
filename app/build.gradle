@@ -62,9 +62,9 @@ android {
     externalNativeBuild {
         cmake {
             path file('src/main/cpp/CMakeLists.txt')
-            // Use 3.10.2+ to accept any CMake version 3.10.2 or higher
-            // This allows CI environments to use their system-installed CMake
-            version '3.10.2+'
+            // CMake 3.22.1 is installed via Android SDK in CI
+            // System CMake 3.20+ removed CMake Server mode that AGP requires
+            version '3.22.1'
         }
     }
 
