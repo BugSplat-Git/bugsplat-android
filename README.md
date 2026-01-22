@@ -16,6 +16,22 @@
 
 The bugsplat-android library enables posting native crash reports to BugSplat from Android devices. Visit [bugsplat.com](https://www.bugsplat.com) for more information and to sign up for an account.
 
+## Requirements 📋
+
+- **Android Gradle Plugin (AGP)**: 8.5.1 or higher (for 16KB page size support)
+- **Android NDK**: r27 or higher recommended
+- **minSdkVersion**: 21 or higher
+- **targetSdkVersion**: 35 or higher recommended
+
+### 16KB Page Size Support
+
+Starting November 1st, 2025, Google Play requires all new apps and updates targeting Android 15+ to [support 16 KB page sizes](https://developer.android.com/guide/practices/page-sizes). The BugSplat Android SDK is built with 16KB ELF alignment to comply with this requirement.
+
+To ensure your app is 16KB compatible:
+1. Use AGP 8.5.1 or higher
+2. Use `useLegacyPackaging false` in your `packagingOptions` (this enables proper 16KB zip alignment)
+3. If you have your own native code, ensure it's compiled with 16KB ELF alignment
+
 ## Integration 🏗️
 
 BugSplat supports multiple methods for installing the bugsplat-android library in a project.
@@ -247,12 +263,16 @@ When integrating BugSplat into your Android application, it's crucial to ensure 
        packagingOptions {
            jniLibs {
                keepDebugSymbols += ['**/*.so']
-               useLegacyPackaging = true
+               // Use uncompressed shared libraries with 16KB zip alignment (AGP 8.5.1+)
+               // Required for Android 15+ devices with 16KB page sizes
+               useLegacyPackaging false
            }
            doNotStrip '**/*.so'
        }
    }
    ```
+   
+   > **Note:** Starting November 1st, 2025, all new apps and updates submitted to Google Play targeting Android 15+ must support [16 KB page sizes](https://developer.android.com/guide/practices/page-sizes). The BugSplat SDK is built with 16KB ELF alignment. Using `useLegacyPackaging false` with AGP 8.5.1+ ensures proper 16KB zip alignment for uncompressed shared libraries.
 
 3. **Enable Native Library Extraction**
    
@@ -304,6 +324,107 @@ The example app demonstrates:
 - Handling errors during initialization
 
 For more information, see the [Example App README](example/README.md).
+
+## Building Native Dependencies 🔨
+
+The BugSplat Android SDK includes prebuilt native libraries, but you can also build them from source with 16KB page size support.
+
+### Prerequisites
+
+- **Android NDK 28.2.13676358** or higher (recommended for 16KB page size support)
+- **depot_tools** (for building Crashpad) - [Installation guide](https://commondatastorage.googleapis.com/chrome-infra-docs/flat/depot_tools/docs/html/depot_tools_tutorial.html)
+- **CMake** and **Ninja**
+
+### NDK 28+ Setup (Required for Crashpad)
+
+NDK 28 removed the legacy standalone toolchain binaries that Crashpad's build system expects (e.g., `aarch64-linux-android-ar`). You need to create symlinks to the LLVM equivalents:
+
+```bash
+cd $ANDROID_NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin  # or linux-x86_64 on Linux
+
+# Create symlinks for aarch64 (arm64-v8a)
+ln -sf llvm-ar aarch64-linux-android-ar
+ln -sf llvm-nm aarch64-linux-android-nm
+ln -sf llvm-strip aarch64-linux-android-strip
+ln -sf llvm-objcopy aarch64-linux-android-objcopy
+ln -sf llvm-ranlib aarch64-linux-android-ranlib
+ln -sf llvm-readelf aarch64-linux-android-readelf
+
+# Create symlinks for arm (armeabi-v7a)
+ln -sf llvm-ar arm-linux-androideabi-ar
+ln -sf llvm-nm arm-linux-androideabi-nm
+ln -sf llvm-strip arm-linux-androideabi-strip
+ln -sf llvm-objcopy arm-linux-androideabi-objcopy
+ln -sf llvm-ranlib arm-linux-androideabi-ranlib
+ln -sf llvm-readelf arm-linux-androideabi-readelf
+
+# Create symlinks for x86_64
+ln -sf llvm-ar x86_64-linux-android-ar
+ln -sf llvm-nm x86_64-linux-android-nm
+ln -sf llvm-strip x86_64-linux-android-strip
+ln -sf llvm-objcopy x86_64-linux-android-objcopy
+ln -sf llvm-ranlib x86_64-linux-android-ranlib
+ln -sf llvm-readelf x86_64-linux-android-readelf
+```
+
+### Building from Source
+
+1. **Clone with submodules:**
+   ```bash
+   git clone --recurse-submodules https://github.com/BugSplat-Git/bugsplat-android
+   cd bugsplat-android
+   ```
+
+2. **Set environment variables (optional):**
+   ```bash
+   # If your NDK is in a non-standard location
+   export ANDROID_NDK="/path/to/your/ndk"
+   
+   # If depot_tools is in a non-standard location
+   export DEPOT_TOOLS="/path/to/depot_tools"
+   ```
+
+3. **Run the build script:**
+   ```bash
+   ./scripts/build-all.sh
+   ```
+
+   Or build components individually:
+   ```bash
+   ./scripts/build-libcurl.sh   # Build libcurl with BoringSSL
+   ./scripts/build-crashpad.sh  # Build Crashpad
+   ```
+
+### What Gets Built
+
+The build scripts compile the following with 16KB page size alignment:
+
+- **libcurl** - HTTP client library (with BoringSSL for TLS)
+- **Crashpad** - Crash reporting framework
+  - `libcrashpad_handler.so` - Crash handler process
+  - `libclient.a` - Client library for crash capture
+  - `libcommon.a` - Common utilities
+  - `libutil.a` - Utility functions
+  - `libbase.a` - Base library (from mini_chromium)
+
+All libraries are built for:
+- `arm64-v8a`
+- `armeabi-v7a`
+- `x86_64`
+
+### 16KB Page Size Configuration
+
+The build uses these flags for 16KB page size compatibility:
+
+```gn
+# In crashpad args.gn
+extra_ldflags = "-static-libstdc++ -Wl,-z,max-page-size=16384"
+```
+
+```cmake
+# In libcurl CMake
+-DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384"
+```
 
 ## Contributing 🤝
 

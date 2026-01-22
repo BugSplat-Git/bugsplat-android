@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 3.19.1)
 
+# Project for BugSplat Android SDK
+project(bugsplat-android)
+
 add_library(bugsplat SHARED native-lib.cpp)
+
+# Enable 16KB page size support
+# See: https://developer.android.com/guide/practices/page-sizes
+target_link_options(bugsplat PRIVATE "-Wl,-z,max-page-size=16384")
 
 add_library(crashpad_common STATIC IMPORTED)
 set_property(TARGET crashpad_common PROPERTY IMPORTED_LOCATION ${PROJECT_SOURCE_DIR}/crashpad/lib/${ANDROID_ABI}/client/libcommon.a)

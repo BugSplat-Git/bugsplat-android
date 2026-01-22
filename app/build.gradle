@@ -17,6 +17,13 @@ android {
         ndk {
             abiFilters 'arm64-v8a', 'x86_64', 'armeabi-v7a'
         }
+        externalNativeBuild {
+            cmake {
+                // Enable 16KB page size support for NDK r27
+                // See: https://developer.android.com/guide/practices/page-sizes
+                arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+            }
+        }
     }
 
     buildTypes {
@@ -27,6 +34,10 @@ android {
     }
 
     packagingOptions {
+        jniLibs {
+            // Use uncompressed shared libraries with 16KB zip alignment (AGP 8.5.1+)
+            useLegacyPackaging false
+        }
         resources {
             // Replaced excludes with doNotStrip to preserve symbols in .so files
             doNotStrip '*/arm64-v8a/*.so'
@@ -55,7 +66,7 @@ android {
         }
     }
 
-    ndkVersion '27.2.12479018'
+    ndkVersion '28.2.13676358'
 }
 
 dependencies {
