@@ -59,10 +59,12 @@ android {
     }
 
     // Ensure native libraries are not stripped
+    // Use uncompressed shared libraries with 16KB zip alignment (AGP 8.5.1+)
+    // See: https://developer.android.com/guide/practices/page-sizes
     packagingOptions {
         jniLibs {
             keepDebugSymbols += ['**/*.so']
-            useLegacyPackaging = true
+            useLegacyPackaging false
         }
         doNotStrip '**/*.so'
     }
