@@ -62,8 +62,9 @@ android {
     externalNativeBuild {
         cmake {
             path file('src/main/cpp/CMakeLists.txt')
-            // Don't specify a specific version - use whatever CMake is available
-            // This allows CI environments to use their installed CMake
+            // Use 3.10.2+ to accept any CMake version 3.10.2 or higher
+            // This allows CI environments to use their system-installed CMake
+            version '3.10.2+'
         }
     }
 
