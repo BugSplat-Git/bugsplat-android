@@ -47,9 +47,6 @@ jobs:
     # Build with Gradle using the Android SDK's CMake
     - name: Build with Gradle
       run: ./gradlew assembleDebug --no-daemon
-      env:
-        # Point to the SDK's CMake
-        PATH: ${{ env.ANDROID_HOME }}/cmake/3.22.1/bin:${{ env.PATH }}
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
