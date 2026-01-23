@@ -426,6 +426,45 @@ extra_ldflags = "-static-libstdc++ -Wl,-z,max-page-size=16384"
 -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384"
 ```
 
+## Building the Release AAR 📦
+
+To build the BugSplat Android SDK as a release AAR file:
+
+1. **Navigate to the project directory:**
+   ```bash
+   cd bugsplat-android
+   ```
+
+2. **Build the release AAR:**
+   ```bash
+   ./gradlew app:assembleRelease
+   ```
+
+   Or to build only the AAR bundle:
+   ```bash
+   ./gradlew app:bundleReleaseAar
+   ```
+
+3. **Find the output:**
+   
+   The AAR file will be located at:
+   ```
+   app/build/outputs/aar/bugsplat-android-release.aar
+   ```
+
+### Build Variants
+
+You can also build the debug variant:
+```bash
+./gradlew app:assembleDebug
+# Output: app/build/outputs/aar/bugsplat-android-debug.aar
+```
+
+Or build all variants at once:
+```bash
+./gradlew app:assemble
+```
+
 ## Contributing 🤝
 
 BugSplat is an open-source project, and we welcome contributions from the community. Please create an issue or open a pull request if you have a suggestion or need additional help.
