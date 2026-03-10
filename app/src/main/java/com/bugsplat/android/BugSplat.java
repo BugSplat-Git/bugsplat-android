@@ -136,4 +136,43 @@ public class BugSplat {
         SymbolUploader uploader = new SymbolUploader(database, application, version, clientId, clientSecret);
         uploader.uploadSymbolsBlocking(context, nativeLibsDir);
     }
+
+    /**
+     * Post user feedback to BugSplat.
+     * This runs on a background thread and returns immediately.
+     *
+     * @param database The BugSplat database name
+     * @param application The application name
+     * @param version The application version
+     * @param title The feedback title (becomes the stack key for grouping)
+     * @param description Additional feedback context
+     * @param user The user's name or id
+     * @param email The user's email
+     */
+    public static void postFeedback(String database, String application, String version,
+                                    String title, String description, String user, String email) {
+        new Thread(() -> {
+            FeedbackClient client = new FeedbackClient(database, application, version);
+            client.postFeedback(title, description, user, email);
+        }).start();
+    }
+
+    /**
+     * Post user feedback to BugSplat.
+     * This blocks until the upload is complete.
+     *
+     * @param database The BugSplat database name
+     * @param application The application name
+     * @param version The application version
+     * @param title The feedback title (becomes the stack key for grouping)
+     * @param description Additional feedback context
+     * @param user The user's name or id
+     * @param email The user's email
+     * @return true if feedback was posted successfully
+     */
+    public static boolean postFeedbackBlocking(String database, String application, String version,
+                                               String title, String description, String user, String email) {
+        FeedbackClient client = new FeedbackClient(database, application, version);
+        return client.postFeedback(title, description, user, email);
+    }
 } 
