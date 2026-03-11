@@ -33,11 +33,11 @@ class FeedbackClient {
         this.version = version;
     }
 
-    boolean postFeedback(String title, String description, String user, String email) {
-        return postFeedback(title, description, user, email, null);
+    boolean postFeedback(String title, String description, String user, String email, String appKey) {
+        return postFeedback(title, description, user, email, appKey, null);
     }
 
-    boolean postFeedback(String title, String description, String user, String email, List<File> attachments) {
+    boolean postFeedback(String title, String description, String user, String email, String appKey, List<File> attachments) {
         try {
             // Create feedback.json and zip it (with optional attachments)
             byte[] zipData = createFeedbackZip(title, description, attachments);
@@ -109,6 +109,7 @@ class FeedbackClient {
                 writeFormField(dos, boundary, "description", description != null ? description : "");
                 writeFormField(dos, boundary, "email", email != null ? email : "");
                 writeFormField(dos, boundary, "user", user != null ? user : "");
+                writeFormField(dos, boundary, "appKey", appKey != null ? appKey : "");
                 dos.writeBytes("--" + boundary + "--\r\n");
             }
 
