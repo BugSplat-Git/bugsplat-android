@@ -7,11 +7,14 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -31,9 +34,13 @@ class FeedbackClient {
     }
 
     boolean postFeedback(String title, String description, String user, String email) {
+        return postFeedback(title, description, user, email, null);
+    }
+
+    boolean postFeedback(String title, String description, String user, String email, List<File> attachments) {
         try {
-            // Create feedback.json and zip it
-            byte[] zipData = createFeedbackZip(title, description);
+            // Create feedback.json and zip it (with optional attachments)
+            byte[] zipData = createFeedbackZip(title, description, attachments);
 
             // Step 1: Get presigned URL
             String baseUrl = "https://" + database + ".bugsplat.com";
@@ -121,7 +128,7 @@ class FeedbackClient {
         }
     }
 
-    private byte[] createFeedbackZip(String title, String description) throws Exception {
+    private byte[] createFeedbackZip(String title, String description, List<File> attachments) throws Exception {
         JSONObject feedbackObj = new JSONObject();
         feedbackObj.put("title", title);
         feedbackObj.put("description", description != null ? description : "");
@@ -132,6 +139,24 @@ class FeedbackClient {
             zos.putNextEntry(new ZipEntry("feedback.json"));
             zos.write(jsonBytes);
             zos.closeEntry();
+
+            if (attachments != null) {
+                byte[] buffer = new byte[4096];
+                for (File file : attachments) {
+                    if (file == null || !file.exists() || !file.isFile()) {
+                        Log.w(TAG, "Skipping invalid attachment: " + file);
+                        continue;
+                    }
+                    zos.putNextEntry(new ZipEntry(file.getName()));
+                    try (FileInputStream fis = new FileInputStream(file)) {
+                        int bytesRead;
+                        while ((bytesRead = fis.read(buffer)) != -1) {
+                            zos.write(buffer, 0, bytesRead);
+                        }
+                    }
+                    zos.closeEntry();
+                }
+            }
         }
         return baos.toByteArray();
     }

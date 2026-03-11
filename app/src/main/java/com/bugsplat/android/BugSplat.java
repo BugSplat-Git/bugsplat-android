@@ -2,6 +2,8 @@ package com.bugsplat.android;
 
 import android.app.Activity;
 import android.content.Context;
+import java.io.File;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -151,9 +153,28 @@ public class BugSplat {
      */
     public static void postFeedback(String database, String application, String version,
                                     String title, String description, String user, String email) {
+        postFeedback(database, application, version, title, description, user, email, null);
+    }
+
+    /**
+     * Post user feedback to BugSplat with file attachments.
+     * This runs on a background thread and returns immediately.
+     *
+     * @param database The BugSplat database name
+     * @param application The application name
+     * @param version The application version
+     * @param title The feedback title (becomes the stack key for grouping)
+     * @param description Additional feedback context
+     * @param user The user's name or id
+     * @param email The user's email
+     * @param attachments List of files to attach to the feedback report, or null for none
+     */
+    public static void postFeedback(String database, String application, String version,
+                                    String title, String description, String user, String email,
+                                    List<File> attachments) {
         new Thread(() -> {
             FeedbackClient client = new FeedbackClient(database, application, version);
-            client.postFeedback(title, description, user, email);
+            client.postFeedback(title, description, user, email, attachments);
         }).start();
     }
 
@@ -172,7 +193,27 @@ public class BugSplat {
      */
     public static boolean postFeedbackBlocking(String database, String application, String version,
                                                String title, String description, String user, String email) {
+        return postFeedbackBlocking(database, application, version, title, description, user, email, null);
+    }
+
+    /**
+     * Post user feedback to BugSplat with file attachments.
+     * This blocks until the upload is complete.
+     *
+     * @param database The BugSplat database name
+     * @param application The application name
+     * @param version The application version
+     * @param title The feedback title (becomes the stack key for grouping)
+     * @param description Additional feedback context
+     * @param user The user's name or id
+     * @param email The user's email
+     * @param attachments List of files to attach to the feedback report, or null for none
+     * @return true if feedback was posted successfully
+     */
+    public static boolean postFeedbackBlocking(String database, String application, String version,
+                                               String title, String description, String user, String email,
+                                               List<File> attachments) {
         FeedbackClient client = new FeedbackClient(database, application, version);
-        return client.postFeedback(title, description, user, email);
+        return client.postFeedback(title, description, user, email, attachments);
     }
 } 
