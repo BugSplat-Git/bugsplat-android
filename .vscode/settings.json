@@ -1,0 +1,4 @@
+{
+    "cmake.sourceDirectory": "${workspaceFolder}/third_party/libcurl-android/boringssl",
+    "java.configuration.updateBuildConfiguration": "automatic"
+}

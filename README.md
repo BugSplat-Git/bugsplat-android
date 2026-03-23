@@ -10,6 +10,10 @@
     <a href="https://discord.gg/bugsplat"><img alt="Join BugSplat on Discord" src="https://img.shields.io/discord/664965194799251487?label=Join%20Discord&logo=Discord&style=social"></a>
 </div>
 
+<div align="center">
+    <a href="https://central.sonatype.com/artifact/com.bugsplat/bugsplat-android"><img alt="Maven Central" src="https://img.shields.io/maven-central/v/com.bugsplat/bugsplat-android"></a>
+</div>
+
 <br/>
 
 ## Introduction 👋
@@ -36,9 +40,26 @@ To ensure your app is 16KB compatible:
 
 BugSplat supports multiple methods for installing the bugsplat-android library in a project.
 
-### Package Manager
+### Gradle (Recommended)
 
-Coming soon!
+Add the BugSplat dependency to your app's `build.gradle` file:
+
+```gradle
+dependencies {
+    implementation 'com.bugsplat:bugsplat-android:1.0.0'
+}
+```
+
+BugSplat is hosted on Maven Central, which is included by default in most Android projects. If needed, ensure `mavenCentral()` is in your `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+```
 
 ### Manual Setup
 
