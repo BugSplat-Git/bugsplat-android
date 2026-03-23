@@ -1,4 +1,4 @@
 {
-    "cmake.sourceDirectory": "/Users/bobby/Desktop/GitHub/bugsplat-android/third_party/libcurl-android/boringssl",
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "cmake.sourceDirectory": "${workspaceFolder}/third_party/libcurl-android/boringssl",
+    "java.configuration.updateBuildConfiguration": "automatic"
 }

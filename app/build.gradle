@@ -101,7 +101,7 @@ mavenPublishing {
 
         scm {
             url = "https://github.com/BugSplat-Git/bugsplat-android"
-            connection = "scm:git:git://github.com/BugSplat-Git/bugsplat-android.git"
+            connection = "scm:git:https://github.com/BugSplat-Git/bugsplat-android.git"
             developerConnection = "scm:git:ssh://git@github.com/BugSplat-Git/bugsplat-android.git"
         }
     }
@@ -160,7 +160,8 @@ afterEvaluate {
 
             doLast {
                 if (originalFile.exists()) {
-                    originalFile.renameTo(newFile)
+                    // Keep original for the maven publish task, copy with descriptive name for manual distribution
+                    java.nio.file.Files.copy(originalFile.toPath(), newFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
                 }
             }
         }
