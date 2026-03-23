@@ -1,5 +1,6 @@
 plugins {
     id 'com.android.library'
+    id 'com.vanniktech.maven.publish'
 }
 
 android {
@@ -69,6 +70,41 @@ android {
     }
 
     ndkVersion '28.2.13676358'
+}
+
+mavenPublishing {
+    publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)
+    signAllPublications()
+
+    coordinates("com.bugsplat", "bugsplat-android", "1.0.0")
+
+    pom {
+        name = "BugSplat Android"
+        description = "BugSplat crash reporting for Android"
+        url = "https://github.com/BugSplat-Git/bugsplat-android"
+        inceptionYear = "2024"
+
+        licenses {
+            license {
+                name = "MIT License"
+                url = "https://opensource.org/licenses/MIT"
+            }
+        }
+
+        developers {
+            developer {
+                id = "bugsplat"
+                name = "BugSplat"
+                url = "https://www.bugsplat.com"
+            }
+        }
+
+        scm {
+            url = "https://github.com/BugSplat-Git/bugsplat-android"
+            connection = "scm:git:git://github.com/BugSplat-Git/bugsplat-android.git"
+            developerConnection = "scm:git:ssh://git@github.com/BugSplat-Git/bugsplat-android.git"
+        }
+    }
 }
 
 dependencies {
