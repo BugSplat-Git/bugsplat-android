@@ -4,6 +4,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -14,6 +15,13 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.bugsplat.android.BugSplat;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -66,6 +74,7 @@ public class MainActivity extends AppCompatActivity {
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_feedback, null);
         EditText titleInput = dialogView.findViewById(R.id.feedbackTitle);
         EditText descriptionInput = dialogView.findViewById(R.id.feedbackDescription);
+        CheckBox includeLogsCheckbox = dialogView.findViewById(R.id.feedbackIncludeLogs);
 
         new AlertDialog.Builder(this)
             .setTitle("Send Feedback")
@@ -73,6 +82,7 @@ public class MainActivity extends AppCompatActivity {
             .setPositiveButton("Submit", (dialog, which) -> {
                 String title = titleInput.getText().toString().trim();
                 String description = descriptionInput.getText().toString().trim();
+                boolean includeLogs = includeLogsCheckbox.isChecked();
 
                 if (title.isEmpty()) {
                     Toast.makeText(this, "Subject is required", Toast.LENGTH_SHORT).show();
@@ -82,6 +92,15 @@ public class MainActivity extends AppCompatActivity {
                 statusTextView.setText("Sending feedback...");
 
                 new Thread(() -> {
+                    List<File> attachments = null;
+                    if (includeLogs) {
+                        File logFile = createSampleLogFile();
+                        if (logFile != null) {
+                            attachments = new ArrayList<>();
+                            attachments.add(logFile);
+                        }
+                    }
+
                     boolean success = BugSplat.postFeedbackBlocking(
                         BuildConfig.BUGSPLAT_DATABASE,
                         BuildConfig.BUGSPLAT_APP_NAME,
@@ -90,7 +109,8 @@ public class MainActivity extends AppCompatActivity {
                         description,
                         null,
                         null,
-                        null
+                        null,
+                        attachments
                     );
 
                     runOnUiThread(() -> {
@@ -106,6 +126,27 @@ public class MainActivity extends AppCompatActivity {
             })
             .setNegativeButton("Cancel", null)
             .show();
+    }
+
+    private File createSampleLogFile() {
+        try {
+            File logFile = new File(getCacheDir(), "sample_logs.txt");
+            String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date());
+            try (FileWriter writer = new FileWriter(logFile)) {
+                writer.write("=== BugSplat Sample Log File ===\n");
+                writer.write("Generated: " + timestamp + "\n\n");
+                writer.write("[INFO]  " + timestamp + " Application started\n");
+                writer.write("[DEBUG] " + timestamp + " BugSplat SDK initialized\n");
+                writer.write("[INFO]  " + timestamp + " User navigated to main screen\n");
+                writer.write("[WARN]  " + timestamp + " Network latency detected (250ms)\n");
+                writer.write("[DEBUG] " + timestamp + " Cache cleared successfully\n");
+                writer.write("[INFO]  " + timestamp + " User submitted feedback\n");
+            }
+            return logFile;
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to create sample log file", e);
+            return null;
+        }
     }
 
     private void logNativeLibraryInfo() {
