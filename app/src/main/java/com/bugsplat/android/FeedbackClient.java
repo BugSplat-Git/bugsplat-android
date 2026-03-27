@@ -6,8 +6,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
@@ -34,62 +36,69 @@ class FeedbackClient {
             String boundary = UUID.randomUUID().toString();
 
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-            conn.setRequestMethod("POST");
-            conn.setDoOutput(true);
-            conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+            try {
+                conn.setRequestMethod("POST");
+                conn.setDoOutput(true);
+                conn.setConnectTimeout(30000);
+                conn.setReadTimeout(30000);
+                conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
 
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            DataOutputStream dos = new DataOutputStream(baos);
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                DataOutputStream dos = new DataOutputStream(baos);
 
-            // Required fields
-            writeFormField(dos, boundary, "database", database);
-            writeFormField(dos, boundary, "appName", application);
-            writeFormField(dos, boundary, "appVersion", version);
-            writeFormField(dos, boundary, "title", title);
+                // Required fields
+                writeFormField(dos, boundary, "database", database);
+                writeFormField(dos, boundary, "appName", application);
+                writeFormField(dos, boundary, "appVersion", version);
+                writeFormField(dos, boundary, "title", title);
 
-            // Optional fields
-            if (description != null && !description.isEmpty()) {
-                writeFormField(dos, boundary, "description", description);
-            }
-            if (user != null && !user.isEmpty()) {
-                writeFormField(dos, boundary, "user", user);
-            }
-            if (email != null && !email.isEmpty()) {
-                writeFormField(dos, boundary, "email", email);
-            }
-            if (appKey != null && !appKey.isEmpty()) {
-                writeFormField(dos, boundary, "appKey", appKey);
-            }
-
-            // File attachments
-            if (attachments != null) {
-                for (File file : attachments) {
-                    if (file == null || !file.exists() || !file.isFile()) {
-                        Log.w(TAG, "Skipping invalid attachment: " + file);
-                        continue;
-                    }
-                    writeFileField(dos, boundary, file.getName(), file);
-                    Log.d(TAG, "Attached file " + file.getName() + " (" + file.length() + " bytes)");
+                // Optional fields
+                if (description != null && !description.isEmpty()) {
+                    writeFormField(dos, boundary, "description", description);
                 }
-            }
+                if (user != null && !user.isEmpty()) {
+                    writeFormField(dos, boundary, "user", user);
+                }
+                if (email != null && !email.isEmpty()) {
+                    writeFormField(dos, boundary, "email", email);
+                }
+                if (appKey != null && !appKey.isEmpty()) {
+                    writeFormField(dos, boundary, "appKey", appKey);
+                }
 
-            dos.writeBytes("--" + boundary + "--\r\n");
-            dos.flush();
+                // File attachments
+                if (attachments != null) {
+                    for (File file : attachments) {
+                        if (file == null || !file.exists() || !file.isFile()) {
+                            Log.w(TAG, "Skipping invalid attachment: " + file);
+                            continue;
+                        }
+                        writeFileField(dos, boundary, file.getName(), file);
+                        Log.d(TAG, "Attached file " + file.getName() + " (" + file.length() + " bytes)");
+                    }
+                }
 
-            byte[] payload = baos.toByteArray();
-            conn.setRequestProperty("Content-Length", String.valueOf(payload.length));
-            conn.getOutputStream().write(payload);
-            conn.getOutputStream().flush();
+                dos.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+                dos.flush();
 
-            int status = conn.getResponseCode();
-            conn.disconnect();
+                byte[] payload = baos.toByteArray();
+                conn.setRequestProperty("Content-Length", String.valueOf(payload.length));
+                try (OutputStream out = conn.getOutputStream()) {
+                    out.write(payload);
+                    out.flush();
+                }
 
-            if (status >= 200 && status < 300) {
-                Log.i(TAG, "Feedback posted successfully (HTTP " + status + ")");
-                return true;
-            } else {
-                Log.e(TAG, "Failed to post feedback (HTTP " + status + ")");
-                return false;
+                int status = conn.getResponseCode();
+
+                if (status >= 200 && status < 300) {
+                    Log.i(TAG, "Feedback posted successfully (HTTP " + status + ")");
+                    return true;
+                } else {
+                    Log.e(TAG, "Failed to post feedback (HTTP " + status + ")");
+                    return false;
+                }
+            } finally {
+                conn.disconnect();
             }
 
         } catch (Exception e) {
@@ -99,16 +108,16 @@ class FeedbackClient {
     }
 
     private void writeFormField(DataOutputStream dos, String boundary, String name, String value) throws Exception {
-        dos.writeBytes("--" + boundary + "\r\n");
-        dos.writeBytes("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n");
-        dos.write(value.getBytes("UTF-8"));
-        dos.writeBytes("\r\n");
+        dos.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        dos.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        dos.write(value.getBytes(StandardCharsets.UTF_8));
+        dos.write("\r\n".getBytes(StandardCharsets.UTF_8));
     }
 
     private void writeFileField(DataOutputStream dos, String boundary, String fieldName, File file) throws Exception {
-        dos.writeBytes("--" + boundary + "\r\n");
-        dos.writeBytes("Content-Disposition: form-data; name=\"" + fieldName + "\"; filename=\"" + file.getName() + "\"\r\n");
-        dos.writeBytes("Content-Type: application/octet-stream\r\n\r\n");
+        dos.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        dos.write(("Content-Disposition: form-data; name=\"" + fieldName + "\"; filename=\"" + file.getName() + "\"\r\n").getBytes(StandardCharsets.UTF_8));
+        dos.write("Content-Type: application/octet-stream\r\n\r\n".getBytes(StandardCharsets.UTF_8));
 
         byte[] buffer = new byte[4096];
         try (FileInputStream fis = new FileInputStream(file)) {
@@ -117,6 +126,6 @@ class FeedbackClient {
                 dos.write(buffer, 0, bytesRead);
             }
         }
-        dos.writeBytes("\r\n");
+        dos.write("\r\n".getBytes(StandardCharsets.UTF_8));
     }
 }
