@@ -4,21 +4,31 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.bugsplat.android.BugSplat;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "BugSplatExample";
     private TextView statusTextView;
     private Button crashButton;
+    private Button feedbackButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -28,6 +38,7 @@ public class MainActivity extends AppCompatActivity {
         // Initialize views
         statusTextView = findViewById(R.id.statusTextView);
         crashButton = findViewById(R.id.crashButton);
+        feedbackButton = findViewById(R.id.feedbackButton);
 
         // Log native library directories
         logNativeLibraryInfo();
@@ -54,6 +65,88 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+
+        // Set up click listener for feedback button
+        feedbackButton.setOnClickListener(v -> showFeedbackDialog());
+    }
+
+    private void showFeedbackDialog() {
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_feedback, null);
+        EditText titleInput = dialogView.findViewById(R.id.feedbackTitle);
+        EditText descriptionInput = dialogView.findViewById(R.id.feedbackDescription);
+        CheckBox includeLogsCheckbox = dialogView.findViewById(R.id.feedbackIncludeLogs);
+
+        new AlertDialog.Builder(this)
+            .setTitle("Send Feedback")
+            .setView(dialogView)
+            .setPositiveButton("Submit", (dialog, which) -> {
+                String title = titleInput.getText().toString().trim();
+                String description = descriptionInput.getText().toString().trim();
+                boolean includeLogs = includeLogsCheckbox.isChecked();
+
+                if (title.isEmpty()) {
+                    Toast.makeText(this, "Subject is required", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                statusTextView.setText("Sending feedback...");
+
+                new Thread(() -> {
+                    List<File> attachments = null;
+                    if (includeLogs) {
+                        File logFile = createSampleLogFile();
+                        if (logFile != null) {
+                            attachments = new ArrayList<>();
+                            attachments.add(logFile);
+                        }
+                    }
+
+                    boolean success = BugSplat.postFeedbackBlocking(
+                        BuildConfig.BUGSPLAT_DATABASE,
+                        BuildConfig.BUGSPLAT_APP_NAME,
+                        BuildConfig.BUGSPLAT_APP_VERSION,
+                        title,
+                        description,
+                        null,
+                        null,
+                        null,
+                        attachments
+                    );
+
+                    runOnUiThread(() -> {
+                        if (success) {
+                            statusTextView.setText("Feedback sent — thank you!");
+                            Toast.makeText(this, "Feedback sent!", Toast.LENGTH_SHORT).show();
+                        } else {
+                            statusTextView.setText("Failed to send feedback");
+                            Toast.makeText(this, "Failed to send feedback", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }).start();
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private File createSampleLogFile() {
+        try {
+            File logFile = new File(getCacheDir(), "sample_logs.txt");
+            String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date());
+            try (FileWriter writer = new FileWriter(logFile)) {
+                writer.write("=== BugSplat Sample Log File ===\n");
+                writer.write("Generated: " + timestamp + "\n\n");
+                writer.write("[INFO]  " + timestamp + " Application started\n");
+                writer.write("[DEBUG] " + timestamp + " BugSplat SDK initialized\n");
+                writer.write("[INFO]  " + timestamp + " User navigated to main screen\n");
+                writer.write("[WARN]  " + timestamp + " Network latency detected (250ms)\n");
+                writer.write("[DEBUG] " + timestamp + " Cache cleared successfully\n");
+                writer.write("[INFO]  " + timestamp + " User submitted feedback\n");
+            }
+            return logFile;
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to create sample log file", e);
+            return null;
+        }
     }
 
     private void logNativeLibraryInfo() {
@@ -61,7 +154,7 @@ public class MainActivity extends AppCompatActivity {
             // Log application native library directory
             File nativeLibDir = new File(getApplicationInfo().nativeLibraryDir);
             Log.d(TAG, "Native library directory: " + nativeLibDir.getAbsolutePath());
-            
+
             // List all files in the native library directory
             if (nativeLibDir.exists() && nativeLibDir.isDirectory()) {
                 File[] files = nativeLibDir.listFiles();
@@ -76,19 +169,19 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Log.d(TAG, "Native library directory does not exist or is not a directory");
             }
-            
+
             // Check for specific libraries
             checkLibrary(nativeLibDir, "libbugsplat.so");
             checkLibrary(nativeLibDir, "libcrashpad_handler.so");
-            
+
             // Log library search path
             Log.d(TAG, "Library search path: " + System.getProperty("java.library.path"));
-            
+
         } catch (Exception e) {
             Log.e(TAG, "Error logging native library info", e);
         }
     }
-    
+
     private void checkLibrary(File directory, String libraryName) {
         File library = new File(directory, libraryName);
         if (library.exists()) {
@@ -105,14 +198,14 @@ public class MainActivity extends AppCompatActivity {
             Log.d(TAG, "  Database: " + BuildConfig.BUGSPLAT_DATABASE);
             Log.d(TAG, "  Application: " + BuildConfig.BUGSPLAT_APP_NAME);
             Log.d(TAG, "  Version: " + BuildConfig.BUGSPLAT_APP_VERSION);
-            
+
             Log.d(TAG, "Initializing BugSplat...");
             // Initialize BugSplat with values from BuildConfig
-            BugSplat.init(this, 
-                          BuildConfig.BUGSPLAT_DATABASE, 
-                          BuildConfig.BUGSPLAT_APP_NAME, 
+            BugSplat.init(this,
+                          BuildConfig.BUGSPLAT_DATABASE,
+                          BuildConfig.BUGSPLAT_APP_NAME,
                           BuildConfig.BUGSPLAT_APP_VERSION);
-            
+
             // Update UI
             String statusText = String.format("Status: BugSplat initialized\nDatabase: %s\nApp: %s\nVersion: %s",
                                              BuildConfig.BUGSPLAT_DATABASE,
@@ -133,4 +226,4 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
-} 
+}

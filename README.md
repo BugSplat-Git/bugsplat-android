@@ -327,6 +327,56 @@ When integrating BugSplat into your Android application, it's crucial to ensure 
 
 These configurations ensure that the BugSplat native libraries are properly included in your app and can function correctly to capture and report native crashes.
 
+## User Feedback 💬
+
+BugSplat supports collecting non-crashing user feedback such as bug reports and feature requests. Feedback reports appear in BugSplat alongside crash reports with the "User Feedback" type.
+
+### Posting Feedback
+
+Use `BugSplat.postFeedback` to submit feedback asynchronously, or `BugSplat.postFeedbackBlocking` for synchronous submission:
+
+```java
+// Async (returns immediately, runs on background thread)
+BugSplat.postFeedback(
+    "fred",                    // database
+    "my-android-crasher",      // application
+    "1.0.0",                   // version
+    "Login button broken",     // title (required)
+    "Nothing happens on tap",  // description
+    "Jane",                    // user
+    "jane@example.com",        // email
+    null                       // appKey
+);
+
+// Blocking (returns true on success)
+boolean success = BugSplat.postFeedbackBlocking(
+    "fred", "my-android-crasher", "1.0.0",
+    "Login button broken", "Nothing happens on tap",
+    "Jane", "jane@example.com", null
+);
+```
+
+### File Attachments
+
+Pass a list of `File` objects to attach files to the feedback report:
+
+```java
+List<File> attachments = new ArrayList<>();
+attachments.add(new File(getFilesDir(), "screenshot.png"));
+attachments.add(new File(getFilesDir(), "app.log"));
+
+BugSplat.postFeedback(
+    "fred", "my-android-crasher", "1.0.0",
+    "Login button broken", "Nothing happens on tap",
+    "Jane", "jane@example.com", null,
+    attachments
+);
+```
+
+### Example Feedback Dialog
+
+The example app includes a simple feedback dialog using Android's `AlertDialog`. See [`MainActivity.java`](example/src/main/java/com/bugsplat/example/MainActivity.java) for the implementation. The dialog collects a subject and optional description, then posts feedback using `BugSplat.postFeedbackBlocking` on a background thread.
+
 ## Sample Applications 🧑‍🏫
 
 ### Example App
@@ -342,6 +392,7 @@ To run the example app:
 The example app demonstrates:
 - Automatically initializing the BugSplat SDK at app startup
 - Triggering a crash for testing purposes
+- Submitting user feedback via a dialog
 - Handling errors during initialization
 
 For more information, see the [Example App README](example/README.md).

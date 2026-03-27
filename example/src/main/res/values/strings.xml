@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">BugSplat Example</string>
     <string name="crash_button">Crash App</string>
+    <string name="feedback_button">Send Feedback</string>
 </resources> 

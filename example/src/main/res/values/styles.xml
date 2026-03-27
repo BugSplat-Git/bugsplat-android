@@ -16,4 +16,9 @@
     <style name="Widget.BugSplat.Button.Crash">
         <item name="backgroundTint">@color/brand_red</item>
     </style>
+
+    <!-- Feedback button style -->
+    <style name="Widget.BugSplat.Button.Feedback">
+        <item name="backgroundTint">@color/brand_blue</item>
+    </style>
 </resources> 
