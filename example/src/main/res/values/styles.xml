@@ -21,4 +21,9 @@
     <style name="Widget.BugSplat.Button.Feedback">
         <item name="backgroundTint">@color/brand_blue</item>
     </style>
+
+    <!-- Set Attribute button style -->
+    <style name="Widget.BugSplat.Button.Attribute">
+        <item name="backgroundTint">@color/brand_green</item>
+    </style>
 </resources> 

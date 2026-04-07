@@ -70,6 +70,27 @@ public class BugSplat {
     public static void crash() {
         BugSplatBridge.crash();
     }
+
+    /**
+     * Set a custom attribute that will be included in crash reports.
+     * This can be called at any time after init, and the value will be
+     * captured in the next crash report.
+     *
+     * @param key The attribute key
+     * @param value The attribute value
+     */
+    public static void setAttribute(String key, String value) {
+        BugSplatBridge.setAttribute(key, value);
+    }
+
+    /**
+     * Remove a custom attribute so it is no longer included in crash reports.
+     *
+     * @param key The attribute key to remove
+     */
+    public static void removeAttribute(String key) {
+        BugSplatBridge.removeAttribute(key);
+    }
     
     /**
      * Upload debug symbols for native libraries (.so files) in the specified directory.
