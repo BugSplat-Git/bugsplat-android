@@ -12,13 +12,12 @@ using namespace crashpad;
 using namespace std;
 
 /**
- * Creates custom attributes from a Java Map and adds them to the annotations map
- * 
+ * Creates custom attributes from a Java Map and adds them to the global AnnotationList
+ *
  * @param env JNI environment
  * @param attributes_map Java Map<String, String> containing custom attributes
- * @param annotations C++ map to add the attributes to
  */
-void createAttributes(JNIEnv *env, jobject attributes_map, map<string, string>& annotations);
+void createAttributes(JNIEnv *env, jobject attributes_map);
 
 /**
  * Creates a vector of file paths from a Java String array

@@ -96,9 +96,6 @@ Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass cla
     annotations["product"] = env->GetStringUTFChars(application, nullptr);
     annotations["version"] = env->GetStringUTFChars(version, nullptr);
 
-    // Create custom attributes
-    createAttributes(env, attributes_map, annotations);
-
     // Register an AnnotationList for runtime-updatable annotations.
     // Unlike the annotations map passed to StartHandlerAtCrash, these live in process memory
     // and can be modified at any time — the crash handler reads them directly at crash time.
@@ -108,6 +105,10 @@ Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass cla
         auto* da = new DynamicAnnotation(entry.first.c_str(), entry.second.c_str());
         (*g_annotations)[entry.first] = da;
     }
+
+    // Add custom attributes to the AnnotationList only (not the StartHandlerAtCrash
+    // annotations map) so they can be overridden at runtime via setAttribute.
+    createAttributes(env, attributes_map);
 
     // Crashpad arguments
     vector<string> arguments;
@@ -146,43 +147,44 @@ Java_com_bugsplat_android_BugSplatBridge_jniCrash(JNIEnv *env, jclass clazz)
 }
 
 // Utility function implementations
-void createAttributes(JNIEnv *env, jobject attributes_map, map<string, string>& annotations) {
-    if (attributes_map == nullptr) {
+void createAttributes(JNIEnv *env, jobject attributes_map) {
+    if (attributes_map == nullptr || g_annotations == nullptr) {
         return;
     }
-    
+
     // Get Map class and methods
     jclass mapClass = env->FindClass("java/util/Map");
     jmethodID entrySetMethod = env->GetMethodID(mapClass, "entrySet", "()Ljava/util/Set;");
-    
+
     // Get Set of Map.Entry objects
     jobject entrySet = env->CallObjectMethod(attributes_map, entrySetMethod);
     jclass setClass = env->FindClass("java/util/Set");
     jmethodID iteratorMethod = env->GetMethodID(setClass, "iterator", "()Ljava/util/Iterator;");
-    
+
     // Get Iterator
     jobject iterator = env->CallObjectMethod(entrySet, iteratorMethod);
     jclass iteratorClass = env->FindClass("java/util/Iterator");
     jmethodID hasNextMethod = env->GetMethodID(iteratorClass, "hasNext", "()Z");
     jmethodID nextMethod = env->GetMethodID(iteratorClass, "next", "()Ljava/lang/Object;");
-    
+
     // Get Map.Entry class and methods
     jclass entryClass = env->FindClass("java/util/Map$Entry");
     jmethodID getKeyMethod = env->GetMethodID(entryClass, "getKey", "()Ljava/lang/Object;");
     jmethodID getValueMethod = env->GetMethodID(entryClass, "getValue", "()Ljava/lang/Object;");
-    
+
     // Iterate through entries
     while (env->CallBooleanMethod(iterator, hasNextMethod)) {
         jobject entry = env->CallObjectMethod(iterator, nextMethod);
         jstring key = (jstring)env->CallObjectMethod(entry, getKeyMethod);
         jstring value = (jstring)env->CallObjectMethod(entry, getValueMethod);
-        
+
         const char* keyStr = env->GetStringUTFChars(key, nullptr);
         const char* valueStr = env->GetStringUTFChars(value, nullptr);
-        
-        // Add to annotations
-        annotations[keyStr] = valueStr;
-        
+
+        // Add to AnnotationList
+        auto* da = new DynamicAnnotation(keyStr, valueStr);
+        (*g_annotations)[keyStr] = da;
+
         // Release resources
         env->ReleaseStringUTFChars(key, keyStr);
         env->ReleaseStringUTFChars(value, valueStr);
@@ -190,7 +192,7 @@ void createAttributes(JNIEnv *env, jobject attributes_map, map<string, string>& 
         env->DeleteLocalRef(value);
         env->DeleteLocalRef(entry);
     }
-    
+
     // Clean up references
     env->DeleteLocalRef(iterator);
     env->DeleteLocalRef(entrySet);
