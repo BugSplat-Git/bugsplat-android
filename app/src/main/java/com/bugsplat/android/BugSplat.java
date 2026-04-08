@@ -70,6 +70,35 @@ public class BugSplat {
     public static void crash() {
         BugSplatBridge.crash();
     }
+
+    /**
+     * Set a custom attribute that will be included in crash reports.
+     * This can be called at any time after init, and the value will be
+     * captured in the next crash report.
+     *
+     * <p>The backing store supports a maximum of 64 entries with keys and
+     * values each limited to 255 bytes. Entries that exceed these limits
+     * may be silently truncated or dropped.</p>
+     *
+     * <p>Passing a null value is equivalent to calling {@link #removeAttribute(String)}.</p>
+     *
+     * @param key The attribute key (must not be null or blank)
+     * @param value The attribute value, or null to remove the attribute
+     * @throws IllegalArgumentException if key is null or blank
+     */
+    public static void setAttribute(String key, String value) {
+        BugSplatBridge.setAttribute(key, value);
+    }
+
+    /**
+     * Remove a custom attribute so it is no longer included in crash reports.
+     *
+     * @param key The attribute key to remove (must not be null or blank)
+     * @throws IllegalArgumentException if key is null or blank
+     */
+    public static void removeAttribute(String key) {
+        BugSplatBridge.removeAttribute(key);
+    }
     
     /**
      * Upload debug symbols for native libraries (.so files) in the specified directory.

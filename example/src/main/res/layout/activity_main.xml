@@ -52,10 +52,22 @@
         android:layout_marginTop="16dp"
         android:text="@string/feedback_button"
         style="@style/Widget.BugSplat.Button.Feedback"
-        app:layout_constraintBottom_toTopOf="@+id/statusTextView"
+        app:layout_constraintBottom_toTopOf="@+id/setAttributeButton"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/crashButton" />
+
+    <Button
+        android:id="@+id/setAttributeButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/set_attribute_button"
+        style="@style/Widget.BugSplat.Button.Attribute"
+        app:layout_constraintBottom_toTopOf="@+id/statusTextView"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/feedbackButton" />
 
     <TextView
         android:id="@+id/statusTextView"
@@ -70,6 +82,6 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/feedbackButton" />
+        app:layout_constraintTop_toBottomOf="@+id/setAttributeButton" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

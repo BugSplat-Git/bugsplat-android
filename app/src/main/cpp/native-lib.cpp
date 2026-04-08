@@ -3,13 +3,17 @@
 #include <string>
 #include <unistd.h>
 #include "client/crashpad_client.h"
+#include "client/crashpad_info.h"
 #include "client/crash_report_database.h"
 #include "client/settings.h"
+#include "client/simple_string_dictionary.h"
 #include "include/bugsplat_utils.h"
 
 using namespace base;
 using namespace crashpad;
 using namespace std;
+
+static SimpleStringDictionary* g_simple_annotations = nullptr;
 
 // Forward declarations of JNI functions
 extern "C" JNIEXPORT jboolean JNICALL
@@ -24,6 +28,14 @@ Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass cla
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_bugsplat_android_BugSplatBridge_jniCrash(JNIEnv *env, jclass clazz);
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_bugsplat_android_BugSplatBridge_jniSetAttribute(JNIEnv *env, jclass clazz,
+                                                         jstring key, jstring value);
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_bugsplat_android_BugSplatBridge_jniRemoveAttribute(JNIEnv *env, jclass clazz,
+                                                            jstring key);
 
 // JNI implementation
 extern "C" JNIEXPORT jboolean JNICALL
@@ -50,7 +62,7 @@ Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass cla
     string url = "https://" + databaseString + ".bugsplat.com/post/bp/crash/crashpad.php";
     __android_log_print(ANDROID_LOG_INFO, "bugsplat-android", "Url: %s", url.c_str());
 
-    // Crashpad annotations
+    // Crashpad annotations (passed to StartHandlerAtCrash for upload metadata)
     map<string, string> annotations;
     annotations["format"] = "minidump";
     annotations["database"] = databaseString;
@@ -59,6 +71,15 @@ Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass cla
 
     // Create custom attributes
     createAttributes(env, attributes_map, annotations);
+
+    // Register a SimpleStringDictionary on CrashpadInfo for runtime-updatable annotations.
+    // Unlike the annotations map passed to StartHandlerAtCrash, these live in process memory
+    // and can be modified at any time — the crash handler reads them directly at crash time.
+    g_simple_annotations = new SimpleStringDictionary();
+    for (const auto& entry : annotations) {
+        g_simple_annotations->SetKeyValue(entry.first, entry.second);
+    }
+    CrashpadInfo::GetCrashpadInfo()->set_simple_annotations(g_simple_annotations);
 
     // Crashpad arguments
     vector<string> arguments;
@@ -145,6 +166,38 @@ void createAttributes(JNIEnv *env, jobject attributes_map, map<string, string>& 
     // Clean up references
     env->DeleteLocalRef(iterator);
     env->DeleteLocalRef(entrySet);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_bugsplat_android_BugSplatBridge_jniSetAttribute(JNIEnv *env, jclass clazz,
+                                                         jstring key, jstring value) {
+    if (g_simple_annotations == nullptr) {
+        __android_log_print(ANDROID_LOG_WARN, "bugsplat-android", "setAttribute called before init");
+        return;
+    }
+
+    const char* keyStr = env->GetStringUTFChars(key, nullptr);
+    const char* valueStr = env->GetStringUTFChars(value, nullptr);
+
+    g_simple_annotations->SetKeyValue(keyStr, valueStr);
+
+    env->ReleaseStringUTFChars(key, keyStr);
+    env->ReleaseStringUTFChars(value, valueStr);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_bugsplat_android_BugSplatBridge_jniRemoveAttribute(JNIEnv *env, jclass clazz,
+                                                            jstring key) {
+    if (g_simple_annotations == nullptr) {
+        __android_log_print(ANDROID_LOG_WARN, "bugsplat-android", "removeAttribute called before init");
+        return;
+    }
+
+    const char* keyStr = env->GetStringUTFChars(key, nullptr);
+
+    g_simple_annotations->RemoveKey(keyStr);
+
+    env->ReleaseStringUTFChars(key, keyStr);
 }
 
 vector<FilePath> createAttachments(JNIEnv *env, jobjectArray attachments) {

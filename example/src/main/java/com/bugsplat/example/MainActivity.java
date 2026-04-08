@@ -29,6 +29,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView statusTextView;
     private Button crashButton;
     private Button feedbackButton;
+    private Button setAttributeButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,6 +40,7 @@ public class MainActivity extends AppCompatActivity {
         statusTextView = findViewById(R.id.statusTextView);
         crashButton = findViewById(R.id.crashButton);
         feedbackButton = findViewById(R.id.feedbackButton);
+        setAttributeButton = findViewById(R.id.setAttributeButton);
 
         // Log native library directories
         logNativeLibraryInfo();
@@ -68,6 +70,35 @@ public class MainActivity extends AppCompatActivity {
 
         // Set up click listener for feedback button
         feedbackButton.setOnClickListener(v -> showFeedbackDialog());
+
+        // Set up click listener for set attribute button
+        setAttributeButton.setOnClickListener(v -> showSetAttributeDialog());
+    }
+
+    private void showSetAttributeDialog() {
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_attribute, null);
+        EditText keyInput = dialogView.findViewById(R.id.attributeKey);
+        EditText valueInput = dialogView.findViewById(R.id.attributeValue);
+
+        new AlertDialog.Builder(this)
+            .setTitle("Set Attribute")
+            .setView(dialogView)
+            .setPositiveButton("Set", (dialog, which) -> {
+                String key = keyInput.getText().toString().trim();
+                String value = valueInput.getText().toString().trim();
+
+                if (key.isEmpty()) {
+                    Toast.makeText(this, "Key is required", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                BugSplat.setAttribute(key, value);
+                statusTextView.setText("Attribute set: " + key + " = " + value);
+                Toast.makeText(this, "Attribute set!", Toast.LENGTH_SHORT).show();
+                Log.d(TAG, "setAttribute: " + key + " = " + value);
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
     }
 
     private void showFeedbackDialog() {
