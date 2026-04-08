@@ -76,9 +76,8 @@ public class BugSplat {
      * This can be called at any time after init, and the value will be
      * captured in the next crash report.
      *
-     * <p>The backing store supports a maximum of 64 entries with keys and
-     * values each limited to 255 bytes. Entries that exceed these limits
-     * may be silently truncated or dropped.</p>
+     * <p>Keys and values are each limited to 255 bytes and will be truncated
+     * if they exceed this limit.</p>
      *
      * <p>Passing a null value is equivalent to calling {@link #removeAttribute(String)}.</p>
      *

@@ -1,19 +1,46 @@
 #include <android/log.h>
 #include <jni.h>
+#include <map>
 #include <string>
 #include <unistd.h>
+#include "client/annotation.h"
+#include "client/annotation_list.h"
 #include "client/crashpad_client.h"
 #include "client/crashpad_info.h"
 #include "client/crash_report_database.h"
 #include "client/settings.h"
-#include "client/simple_string_dictionary.h"
 #include "include/bugsplat_utils.h"
 
 using namespace base;
 using namespace crashpad;
 using namespace std;
 
-static SimpleStringDictionary* g_simple_annotations = nullptr;
+// Holds a dynamically created Annotation with its own name and value storage.
+// Each instance self-registers with the global AnnotationList on first SetSize().
+struct DynamicAnnotation {
+    char name[256];
+    char value[256];
+    Annotation annotation;
+
+    DynamicAnnotation(const char* key, const char* val)
+        : annotation(Annotation::Type::kString, name, value) {
+        strncpy(name, key, sizeof(name) - 1);
+        name[sizeof(name) - 1] = '\0';
+        SetValue(val);
+    }
+
+    void SetValue(const char* val) {
+        strncpy(value, val, sizeof(value) - 1);
+        value[sizeof(value) - 1] = '\0';
+        annotation.SetSize(strlen(value));
+    }
+
+    void Clear() {
+        annotation.Clear();
+    }
+};
+
+static map<string, DynamicAnnotation*>* g_annotations = nullptr;
 
 // Forward declarations of JNI functions
 extern "C" JNIEXPORT jboolean JNICALL
@@ -69,17 +96,19 @@ Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass cla
     annotations["product"] = env->GetStringUTFChars(application, nullptr);
     annotations["version"] = env->GetStringUTFChars(version, nullptr);
 
-    // Create custom attributes
-    createAttributes(env, attributes_map, annotations);
-
-    // Register a SimpleStringDictionary on CrashpadInfo for runtime-updatable annotations.
+    // Register an AnnotationList for runtime-updatable annotations.
     // Unlike the annotations map passed to StartHandlerAtCrash, these live in process memory
     // and can be modified at any time — the crash handler reads them directly at crash time.
-    g_simple_annotations = new SimpleStringDictionary();
+    AnnotationList::Register();
+    g_annotations = new map<string, DynamicAnnotation*>();
     for (const auto& entry : annotations) {
-        g_simple_annotations->SetKeyValue(entry.first, entry.second);
+        auto* da = new DynamicAnnotation(entry.first.c_str(), entry.second.c_str());
+        (*g_annotations)[entry.first] = da;
     }
-    CrashpadInfo::GetCrashpadInfo()->set_simple_annotations(g_simple_annotations);
+
+    // Add custom attributes to the AnnotationList only (not the StartHandlerAtCrash
+    // annotations map) so they can be overridden at runtime via setAttribute.
+    createAttributes(env, attributes_map);
 
     // Crashpad arguments
     vector<string> arguments;
@@ -118,43 +147,44 @@ Java_com_bugsplat_android_BugSplatBridge_jniCrash(JNIEnv *env, jclass clazz)
 }
 
 // Utility function implementations
-void createAttributes(JNIEnv *env, jobject attributes_map, map<string, string>& annotations) {
-    if (attributes_map == nullptr) {
+void createAttributes(JNIEnv *env, jobject attributes_map) {
+    if (attributes_map == nullptr || g_annotations == nullptr) {
         return;
     }
-    
+
     // Get Map class and methods
     jclass mapClass = env->FindClass("java/util/Map");
     jmethodID entrySetMethod = env->GetMethodID(mapClass, "entrySet", "()Ljava/util/Set;");
-    
+
     // Get Set of Map.Entry objects
     jobject entrySet = env->CallObjectMethod(attributes_map, entrySetMethod);
     jclass setClass = env->FindClass("java/util/Set");
     jmethodID iteratorMethod = env->GetMethodID(setClass, "iterator", "()Ljava/util/Iterator;");
-    
+
     // Get Iterator
     jobject iterator = env->CallObjectMethod(entrySet, iteratorMethod);
     jclass iteratorClass = env->FindClass("java/util/Iterator");
     jmethodID hasNextMethod = env->GetMethodID(iteratorClass, "hasNext", "()Z");
     jmethodID nextMethod = env->GetMethodID(iteratorClass, "next", "()Ljava/lang/Object;");
-    
+
     // Get Map.Entry class and methods
     jclass entryClass = env->FindClass("java/util/Map$Entry");
     jmethodID getKeyMethod = env->GetMethodID(entryClass, "getKey", "()Ljava/lang/Object;");
     jmethodID getValueMethod = env->GetMethodID(entryClass, "getValue", "()Ljava/lang/Object;");
-    
+
     // Iterate through entries
     while (env->CallBooleanMethod(iterator, hasNextMethod)) {
         jobject entry = env->CallObjectMethod(iterator, nextMethod);
         jstring key = (jstring)env->CallObjectMethod(entry, getKeyMethod);
         jstring value = (jstring)env->CallObjectMethod(entry, getValueMethod);
-        
+
         const char* keyStr = env->GetStringUTFChars(key, nullptr);
         const char* valueStr = env->GetStringUTFChars(value, nullptr);
-        
-        // Add to annotations
-        annotations[keyStr] = valueStr;
-        
+
+        // Add to AnnotationList
+        auto* da = new DynamicAnnotation(keyStr, valueStr);
+        (*g_annotations)[keyStr] = da;
+
         // Release resources
         env->ReleaseStringUTFChars(key, keyStr);
         env->ReleaseStringUTFChars(value, valueStr);
@@ -162,7 +192,7 @@ void createAttributes(JNIEnv *env, jobject attributes_map, map<string, string>& 
         env->DeleteLocalRef(value);
         env->DeleteLocalRef(entry);
     }
-    
+
     // Clean up references
     env->DeleteLocalRef(iterator);
     env->DeleteLocalRef(entrySet);
@@ -171,7 +201,7 @@ void createAttributes(JNIEnv *env, jobject attributes_map, map<string, string>& 
 extern "C" JNIEXPORT void JNICALL
 Java_com_bugsplat_android_BugSplatBridge_jniSetAttribute(JNIEnv *env, jclass clazz,
                                                          jstring key, jstring value) {
-    if (g_simple_annotations == nullptr) {
+    if (g_annotations == nullptr) {
         __android_log_print(ANDROID_LOG_WARN, "bugsplat-android", "setAttribute called before init");
         return;
     }
@@ -179,7 +209,13 @@ Java_com_bugsplat_android_BugSplatBridge_jniSetAttribute(JNIEnv *env, jclass cla
     const char* keyStr = env->GetStringUTFChars(key, nullptr);
     const char* valueStr = env->GetStringUTFChars(value, nullptr);
 
-    g_simple_annotations->SetKeyValue(keyStr, valueStr);
+    auto it = g_annotations->find(keyStr);
+    if (it != g_annotations->end()) {
+        it->second->SetValue(valueStr);
+    } else {
+        auto* da = new DynamicAnnotation(keyStr, valueStr);
+        (*g_annotations)[keyStr] = da;
+    }
 
     env->ReleaseStringUTFChars(key, keyStr);
     env->ReleaseStringUTFChars(value, valueStr);
@@ -188,14 +224,17 @@ Java_com_bugsplat_android_BugSplatBridge_jniSetAttribute(JNIEnv *env, jclass cla
 extern "C" JNIEXPORT void JNICALL
 Java_com_bugsplat_android_BugSplatBridge_jniRemoveAttribute(JNIEnv *env, jclass clazz,
                                                             jstring key) {
-    if (g_simple_annotations == nullptr) {
+    if (g_annotations == nullptr) {
         __android_log_print(ANDROID_LOG_WARN, "bugsplat-android", "removeAttribute called before init");
         return;
     }
 
     const char* keyStr = env->GetStringUTFChars(key, nullptr);
 
-    g_simple_annotations->RemoveKey(keyStr);
+    auto it = g_annotations->find(keyStr);
+    if (it != g_annotations->end()) {
+        it->second->Clear();
+    }
 
     env->ReleaseStringUTFChars(key, keyStr);
 }
