@@ -42,11 +42,23 @@ public class BugSplatBridge {
     }
 
     public static void setAttribute(String key, String value) {
+        validateAttributeKey(key);
+        if (value == null) {
+            jniRemoveAttribute(key);
+            return;
+        }
         jniSetAttribute(key, value);
     }
 
     public static void removeAttribute(String key) {
+        validateAttributeKey(key);
         jniRemoveAttribute(key);
+    }
+
+    private static void validateAttributeKey(String key) {
+        if (key == null || key.trim().isEmpty()) {
+            throw new IllegalArgumentException("Attribute key must not be null or blank");
+        }
     }
 
     static native boolean jniInitBugSplat(String dataDir, String libDir, String database, String application,
