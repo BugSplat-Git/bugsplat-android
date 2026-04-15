@@ -327,6 +327,40 @@ When integrating BugSplat into your Android application, it's crucial to ensure 
 
 These configurations ensure that the BugSplat native libraries are properly included in your app and can function correctly to capture and report native crashes.
 
+## ANR Detection 🐌
+
+The BugSplat Android SDK automatically detects and reports Application Not Responding (ANR) events on Android 11+ (API level 30+) using the [`ApplicationExitInfo`](https://developer.android.com/reference/android/app/ApplicationExitInfo) API.
+
+### How It Works
+
+When the system kills your app due to an ANR, the event is recorded by Android. On the next app launch, the SDK queries `ActivityManager.getHistoricalProcessExitReasons()` for new ANRs, reads the system-provided thread dump, and uploads it to BugSplat. ANR reports appear alongside crashes with the **"Android ANR"** type.
+
+The thread dump includes:
+- Full Java stack traces for all threads in the process
+- Native stack frames with BuildIds (symbolicated against uploaded `.sym` files)
+- Lock contention information (which threads are holding/waiting for locks)
+
+### Configuration
+
+ANR detection is enabled automatically when you call `BugSplat.init()` — no additional configuration needed. The SDK persists the timestamp of the last reported ANR in `SharedPreferences` to avoid duplicate uploads across launches.
+
+### Testing ANR Detection
+
+To test ANR detection, use `BugSplat.hang()` to block the main thread in a native infinite loop:
+
+```java
+// Call this on the main thread to trigger an ANR
+BugSplat.hang();
+```
+
+After calling `BugSplat.hang()`, tap the screen to generate a pending input event — the system will show an ANR dialog after ~5 seconds. Choose "Close app" to kill the process. On the next app launch, the SDK will upload the ANR report to BugSplat.
+
+The resulting thread dump includes a native frame for `jniHang`, which demonstrates end-to-end symbolication when your `.sym` files have been uploaded.
+
+### Supported Versions
+
+ANR detection requires **Android 11+ (API 30+)**. On older Android versions, the `ApplicationExitInfo` API is unavailable and ANR detection is silently disabled.
+
 ## User Feedback 💬
 
 BugSplat supports collecting non-crashing user feedback such as bug reports and feature requests. Feedback reports appear in BugSplat alongside crash reports with the "User Feedback" type.
@@ -392,7 +426,9 @@ To run the example app:
 The example app demonstrates:
 - Automatically initializing the BugSplat SDK at app startup
 - Triggering a crash for testing purposes
+- Triggering an ANR (via `BugSplat.hang()`) to test ANR detection and native frame symbolication
 - Submitting user feedback via a dialog
+- Setting custom attributes via a dialog
 - Handling errors during initialization
 
 For more information, see the [Example App README](example/README.md).
