@@ -173,68 +173,56 @@ This approach requires the `symbol-upload` executable to be included in your app
 
 #### 2. Using Gradle Build Tasks
 
-You can also add a Gradle task to your build process to automatically upload symbols when you build your app. Here's an example of how to set this up:
+You can wire symbol upload into your Gradle build so it runs automatically after `assembleDebug` / `assembleRelease`. The recommended pattern is to keep credentials out of `build.gradle` by loading them from the gitignored `local.properties`.
+
+**Step 1 — Add credentials to `local.properties` (do not commit):**
+
+```properties
+bugsplat.database=your_database
+bugsplat.clientId=your_client_id
+bugsplat.clientSecret=your_client_secret
+```
+
+**Step 2 — Load them in `build.gradle` and register per-ABI upload tasks:**
 
 ```gradle
-// BugSplat configuration
+// Load BugSplat credentials from local.properties
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+
 ext {
-    bugsplatDatabase = "your_database_name" // Replace with your BugSplat database name
-    bugsplatAppName = "your_app_name"       // Replace with your application name
+    bugsplatDatabase = localProps.getProperty('bugsplat.database')
+    bugsplatClientId = localProps.getProperty('bugsplat.clientId', '')
+    bugsplatClientSecret = localProps.getProperty('bugsplat.clientSecret', '')
+    // Use applicationId and versionName as the single source of truth
+    bugsplatAppName = android.defaultConfig.applicationId
     bugsplatAppVersion = android.defaultConfig.versionName
-    // Optional: Add your BugSplat API credentials for symbol upload
-    bugsplatClientId = ""     // Replace with your BugSplat API client ID (optional)
-    bugsplatClientSecret = "" // Replace with your BugSplat API client secret (optional)
 }
 
-// Task to upload debug symbols for native libraries
-task uploadBugSplatSymbols {
-    doLast {
-        // Path to the merged native libraries
-        def nativeLibsDir = "${buildDir}/intermediates/merged_native_libs/debug/out/lib"
-        
-        // Check if the directory exists
-        def nativeLibsDirFile = file(nativeLibsDir)
-        if (!nativeLibsDirFile.exists()) {
-            logger.warn("Native libraries directory not found: ${nativeLibsDir}")
-            return
-        }
-        
-        // Path to the symbol-upload executable
-        def symbolUploadPath = "path/to/symbol-upload" // Adjust this path
-        
-        // Build the command with the directory and glob pattern
-        def command = [
-            symbolUploadPath,
-            "-b", project.ext.bugsplatDatabase,
-            "-a", project.ext.bugsplatAppName,
-            "-v", project.ext.bugsplatAppVersion,
-            "-d", nativeLibsDirFile.absolutePath,
-            "-f", "**/*.so",
-            "-m"  // Run dumpsyms
-        ]
-        
-        // Add client credentials if provided
-        if (project.ext.has('bugsplatClientId') && project.ext.bugsplatClientId) {
-            command.add("-i")
-            command.add(project.ext.bugsplatClientId)
-            command.add("-s")
-            command.add(project.ext.bugsplatClientSecret)
-        }
-        
-        // Execute the command
-        // ... (see example app for full implementation)
-    }
-}
+// See example/build.gradle for the full implementation including:
+//   - resolveSymbolUploadExecutable()   - downloads the symbol-upload binary
+//   - uploadSymbolsForAbi(buildType, abi) - runs symbol-upload against
+//     build/intermediates/merged_native_libs/<buildType>/merge<BuildType>NativeLibs/out/lib/<abi>/
+//   - Per-ABI tasks (uploadBugSplatSymbolsDebugArm64-v8a, etc.)
+//   - AllAbis task that chains the per-ABI tasks serially via mustRunAfter
+//     (parallel uploads aren't safe — the symbol-upload binary uses a shared temp dir)
 
-// Run the symbol upload task after the assembleDebug task
+// Run symbol upload after assembleDebug
 tasks.whenTaskAdded { task ->
     if (task.name == 'assembleDebug') {
-        task.finalizedBy(uploadBugSplatSymbols)
+        task.finalizedBy(tasks.named('uploadBugSplatSymbolsDebugAllAbis'))
     }
 }
 ```
 
-See the [Example App README](example/README.md) for a complete implementation of this approach.
+See [`example/build.gradle`](example/build.gradle) for the complete, working implementation. Key details:
+
+- **Intermediate path** — AGP 8.6+ places merged native libs at `merged_native_libs/<buildType>/merge<BuildType>NativeLibs/out/lib/<abi>/`. Older AGPs used a flat `merged_native_libs/<buildType>/out/lib/<abi>/` layout.
+- **Serial execution** — the `symbol-upload` binary uses a shared temp directory, so per-ABI uploads must be chained via `mustRunAfter` rather than running in parallel.
+- **Missing ABIs** — when Android Studio runs on a single-ABI device (e.g. an arm64 emulator), only that ABI's libs get built. Per-ABI tasks for other ABIs will log a warning and skip cleanly.
 
 #### 3. Using the Command-Line Tool
 
