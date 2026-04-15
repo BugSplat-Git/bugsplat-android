@@ -2,14 +2,31 @@ plugins {
     id 'com.android.application'
 }
 
-// BugSplat configuration - Define at the top level so it can be used throughout the build file
+// Load BugSplat credentials from local.properties (gitignored).
+// Required for symbol upload - add the following to local.properties:
+//   bugsplat.database=yourdb
+//   bugsplat.clientId=yourClientId
+//   bugsplat.clientSecret=yourClientSecret
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+
+def bugsplatDb = localProps.getProperty('bugsplat.database')
+if (!bugsplatDb) {
+    throw new GradleException(
+        "bugsplat.database is not configured. Add bugsplat.database=yourdb to local.properties"
+    )
+}
+
+// BugSplat configuration - appName and appVersion are derived from android.defaultConfig below.
 ext {
-    bugsplatDatabase = "fred" // Replace with your BugSplat database name
-    bugsplatAppName = "my-android-crasher" // Replace with your application name
-    bugsplatAppVersion = "1.0.0" // Can be overridden by versionName below
-    // Optional: Add your BugSplat API credentials for symbol upload
-    bugsplatClientId = ""     // Replace with your BugSplat API client ID (optional)
-    bugsplatClientSecret = "" // Replace with your BugSplat API client secret (optional)
+    bugsplatDatabase = bugsplatDb
+    bugsplatAppName = null       // populated from android.defaultConfig.applicationId
+    bugsplatAppVersion = null    // populated from android.defaultConfig.versionName
+    bugsplatClientId = localProps.getProperty('bugsplat.clientId', '')
+    bugsplatClientSecret = localProps.getProperty('bugsplat.clientSecret', '')
 }
 
 android {
@@ -29,17 +46,17 @@ android {
         versionName "1.0.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        
+
         // Match the ABI filters from the library
         ndk {
             abiFilters 'arm64-v8a', 'x86_64', 'armeabi-v7a'
         }
-        
-        // Update BugSplat version to match app version if needed
-        if (project.ext.bugsplatAppVersion != versionName) {
-            project.ext.bugsplatAppVersion = versionName
-        }
-        
+
+        // Use applicationId and versionName as the single source of truth for
+        // BugSplat's appName/appVersion so they stay in sync with the build.
+        project.ext.bugsplatAppName = applicationId
+        project.ext.bugsplatAppVersion = versionName
+
         // Add BugSplat configuration to BuildConfig
         buildConfigField "String", "BUGSPLAT_DATABASE", "\"${project.ext.bugsplatDatabase}\""
         buildConfigField "String", "BUGSPLAT_APP_NAME", "\"${project.ext.bugsplatAppName}\""
