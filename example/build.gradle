@@ -315,6 +315,9 @@ def abiFilters = android.defaultConfig.ndk.abiFilters
 buildTypes.each { buildType ->
     abiFilters.each { abi ->
         tasks.register("uploadBugSplatSymbols${buildType.capitalize()}${abi.capitalize()}") {
+            // Ensure native libraries are merged before we try to upload symbols.
+            // merge${BuildType}NativeLibs produces merged_native_libs/<buildType>/out/lib/<abi>/
+            dependsOn "merge${buildType.capitalize()}NativeLibs"
             dependsOn uploadBugSplatSymbols
             doFirst {
                 System.setProperty("buildType", buildType)
