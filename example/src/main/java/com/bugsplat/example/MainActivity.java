@@ -74,18 +74,15 @@ public class MainActivity extends AppCompatActivity {
         anrButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Log.d(TAG, "Triggering ANR by blocking main thread...");
+                Log.d(TAG, "Triggering ANR via native hang...");
                 Toast.makeText(MainActivity.this,
                         "Tap the screen to trigger the ANR dialog", Toast.LENGTH_SHORT).show();
-                // Infinite loop blocks the main thread permanently.
-                // The system will show an ANR dialog when the next input event
-                // can't be dispatched within ~5s. Dismissing with "Close app"
-                // kills the process, and the ANR is captured via
-                // ApplicationExitInfo on next launch.
-                //noinspection InfiniteLoopStatement
-                while (true) {
-                    Thread.yield();
-                }
+                // BugSplat.hang() blocks the main thread in a native infinite loop,
+                // so the resulting ANR thread dump includes a symbolicated C++ frame.
+                // Tap the screen to trigger the ANR dialog, then choose "Close app"
+                // to kill the process. The ANR will be captured via ApplicationExitInfo
+                // and uploaded on next launch.
+                BugSplat.hang();
             }
         });
 

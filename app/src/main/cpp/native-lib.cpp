@@ -57,6 +57,9 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_bugsplat_android_BugSplatBridge_jniCrash(JNIEnv *env, jclass clazz);
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_bugsplat_android_BugSplatBridge_jniHang(JNIEnv *env, jclass clazz);
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_bugsplat_android_BugSplatBridge_jniSetAttribute(JNIEnv *env, jclass clazz,
                                                          jstring key, jstring value);
 
@@ -144,6 +147,15 @@ Java_com_bugsplat_android_BugSplatBridge_jniCrash(JNIEnv *env, jclass clazz)
 {
     volatile int* a = reinterpret_cast<volatile int*>(0x42);
     *a = 1;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_bugsplat_android_BugSplatBridge_jniHang(JNIEnv *env, jclass clazz)
+{
+    volatile int counter = 0;
+    while (true) {
+        counter++;
+    }
 }
 
 // Utility function implementations

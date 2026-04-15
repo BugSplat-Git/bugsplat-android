@@ -45,6 +45,14 @@ public class BugSplatBridge {
         jniCrash();
     }
 
+    /**
+     * Hang the calling thread in a native infinite loop. Intended for testing
+     * ANR detection and symbolication of native frames.
+     */
+    public static void hang() {
+        jniHang();
+    }
+
     public static void setAttribute(String key, String value) {
         validateAttributeKey(key);
         if (value == null) {
@@ -69,6 +77,8 @@ public class BugSplatBridge {
             String version, Map<String, String> attributes, String[] attachments);
 
     static native void jniCrash();
+
+    static native void jniHang();
 
     static native void jniSetAttribute(String key, String value);
 

@@ -72,6 +72,16 @@ public class BugSplat {
     }
 
     /**
+     * Hang the calling thread indefinitely in a native infinite loop.
+     * Intended for testing ANR detection — call this from the main thread
+     * to trigger a system ANR with several symbolicated native frames in
+     * the resulting thread dump.
+     */
+    public static void hang() {
+        BugSplatBridge.hang();
+    }
+
+    /**
      * Set a custom attribute that will be included in crash reports.
      * This can be called at any time after init, and the value will be
      * captured in the next crash report.
