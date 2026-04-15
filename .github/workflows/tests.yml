@@ -25,4 +25,8 @@ jobs:
         echo "$ANDROID_HOME/cmake/3.22.1/bin" >> $GITHUB_PATH
 
     - name: Run unit tests
+      env:
+        # The example module requires a bugsplat.database value to configure.
+        # CI doesn't upload symbols, so a placeholder is fine.
+        BUGSPLAT_DATABASE: fred
       run: ./gradlew :app:testDebugUnitTest --no-daemon

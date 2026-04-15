@@ -13,10 +13,16 @@ if (localPropsFile.exists()) {
     localPropsFile.withInputStream { localProps.load(it) }
 }
 
-def bugsplatDb = localProps.getProperty('bugsplat.database')
+// Resolution order: local.properties → -Pbugsplat.database=... → BUGSPLAT_DATABASE env var
+def bugsplatDb = localProps.getProperty('bugsplat.database') ?:
+                 project.findProperty('bugsplat.database') ?:
+                 System.getenv('BUGSPLAT_DATABASE')
 if (!bugsplatDb) {
     throw new GradleException(
-        "bugsplat.database is not configured. Add bugsplat.database=yourdb to local.properties"
+        "bugsplat.database is not configured. Set it in one of:\n" +
+        "  - local.properties: bugsplat.database=yourdb\n" +
+        "  - gradle property:  -Pbugsplat.database=yourdb\n" +
+        "  - env var:          BUGSPLAT_DATABASE=yourdb"
     )
 }
 
