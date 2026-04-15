@@ -316,11 +316,10 @@ public class ReportUploaderTest {
 
         TestableReportUploader(String database, String application, String version, MockWebServer server) {
             super(database, application, version);
-            this.baseUrl = server.url("").toString();
-            // Remove trailing slash
-            if (this.baseUrl.endsWith("/")) {
-                // baseUrl is fine as-is, we'll override the URL construction
-            }
+            // MockWebServer URLs include a trailing slash; strip it since
+            // ReportUploader appends paths starting with "/".
+            String url = server.url("").toString();
+            this.baseUrl = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
         }
 
         @Override

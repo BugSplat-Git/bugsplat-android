@@ -50,7 +50,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="Trigger ANR"
+        android:text="@string/anr_button"
         style="@style/Widget.BugSplat.Button.Crash"
         app:layout_constraintBottom_toTopOf="@+id/feedbackButton"
         app:layout_constraintEnd_toEndOf="parent"

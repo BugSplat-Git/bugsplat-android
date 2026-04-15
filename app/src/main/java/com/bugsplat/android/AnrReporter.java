@@ -10,6 +10,8 @@ import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -66,6 +68,10 @@ class AnrReporter {
                 Log.e(TAG, "Failed to check/report ANRs", e);
             }
         });
+        // This reporter is one-shot — there will never be more work submitted
+        // after the initial check. shutdown() lets the worker thread exit once
+        // the submitted task completes instead of lingering as a daemon.
+        executor.shutdown();
     }
 
     private void checkAndReportInternal() {
@@ -89,25 +95,34 @@ class AnrReporter {
 
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         long lastReportedTimestamp = prefs.getLong(PREF_LAST_REPORTED_TIMESTAMP, 0);
-        long newestAnrTimestamp = lastReportedTimestamp;
+
+        // getHistoricalProcessExitReasons returns newest-first. Reverse to
+        // oldest-first so we can advance the watermark in chronological order
+        // and stop on the first upload failure (leaving newer ANRs for the
+        // next launch). This prevents a successful newer upload from masking
+        // a failed older one.
+        List<ApplicationExitInfo> orderedOldestFirst = new ArrayList<>(exitInfos);
+        Collections.reverse(orderedOldestFirst);
 
         ReportUploader uploader = new ReportUploader(database, application, version);
+        long advanceTo = lastReportedTimestamp;
 
-        for (ApplicationExitInfo exitInfo : exitInfos) {
+        for (ApplicationExitInfo exitInfo : orderedOldestFirst) {
             if (exitInfo.getReason() != ApplicationExitInfo.REASON_ANR) {
                 continue;
             }
 
             long timestamp = exitInfo.getTimestamp();
             if (timestamp <= lastReportedTimestamp) {
-                break;
+                continue; // already reported in a prior session
             }
-
-            newestAnrTimestamp = Math.max(newestAnrTimestamp, timestamp);
 
             String threadDump = readTraceStream(exitInfo);
             if (threadDump == null || threadDump.isEmpty()) {
-                Log.w(TAG, "Empty trace stream for ANR at " + timestamp);
+                // Some ANR records have no trace (known Android quirk).
+                // Advance past them so we don't retry forever.
+                Log.w(TAG, "Empty trace stream for ANR at " + timestamp + ", skipping");
+                advanceTo = Math.max(advanceTo, timestamp);
                 continue;
             }
 
@@ -119,8 +134,9 @@ class AnrReporter {
                     + ", foreground=" + foreground
                     + ", description=" + exitInfo.getDescription() + ")");
 
+            boolean uploaded = false;
             try {
-                uploader.upload(
+                uploaded = uploader.upload(
                         threadDump.getBytes("UTF-8"),
                         "anr_trace.txt",
                         CRASH_TYPE,
@@ -129,11 +145,19 @@ class AnrReporter {
             } catch (IOException e) {
                 Log.e(TAG, "Failed to upload ANR report", e);
             }
+
+            if (uploaded) {
+                advanceTo = Math.max(advanceTo, timestamp);
+            } else {
+                // Transient failure — stop so the remaining newer ANRs
+                // are retried next launch.
+                break;
+            }
         }
 
-        if (newestAnrTimestamp > lastReportedTimestamp) {
+        if (advanceTo > lastReportedTimestamp) {
             prefs.edit()
-                    .putLong(PREF_LAST_REPORTED_TIMESTAMP, newestAnrTimestamp)
+                    .putLong(PREF_LAST_REPORTED_TIMESTAMP, advanceTo)
                     .apply();
         }
     }

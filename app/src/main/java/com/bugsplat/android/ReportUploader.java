@@ -15,7 +15,9 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -51,13 +53,15 @@ class ReportUploader {
      * Upload a file using the 3-part S3 upload flow.
      *
      * @param file       The file to upload
-     * @param crashType  The crash type string (e.g. "Android ANR", "Feedback")
+     * @param crashType  The crash type string (e.g. "Android ANR", "UserFeedback")
      * @param crashTypeId The crash type ID
      * @return true if the upload succeeded
      */
     boolean upload(File file, String crashType, int crashTypeId) throws IOException {
-        byte[] zipped = createZip(file.getName(), new FileInputStream(file));
-        return uploadZipped(zipped, file.getName(), crashType, crashTypeId);
+        try (FileInputStream fis = new FileInputStream(file)) {
+            byte[] zipped = createZip(file.getName(), fis);
+            return uploadZipped(zipped, file.getName(), crashType, crashTypeId);
+        }
     }
 
     /**
@@ -65,13 +69,33 @@ class ReportUploader {
      *
      * @param data       The data to upload
      * @param fileName   The filename for the zip entry
-     * @param crashType  The crash type string (e.g. "Android ANR", "Feedback")
+     * @param crashType  The crash type string (e.g. "Android ANR", "UserFeedback")
      * @param crashTypeId The crash type ID
      * @return true if the upload succeeded
      */
     boolean upload(byte[] data, String fileName, String crashType, int crashTypeId) throws IOException {
         byte[] zipped = createZip(fileName, new ByteArrayInputStream(data));
         return uploadZipped(zipped, fileName, crashType, crashTypeId);
+    }
+
+    /**
+     * Upload multiple entries packed into a single zip using the 3-part S3 upload flow.
+     * Entries are added to the zip in the iteration order of {@code entries}.
+     * Used by feedback uploads which bundle the report + attached files into one zip.
+     *
+     * @param entries    Map of zip-entry name to bytes. Must not be empty.
+     * @param crashType  The crash type string
+     * @param crashTypeId The crash type ID
+     * @return true if the upload succeeded
+     */
+    boolean upload(Map<String, byte[]> entries, String crashType, int crashTypeId) throws IOException {
+        if (entries == null || entries.isEmpty()) {
+            throw new IllegalArgumentException("entries must not be empty");
+        }
+        byte[] zipped = createZip(entries);
+        // Use the first entry's name as the zip label for logging
+        String zipName = entries.keySet().iterator().next();
+        return uploadZipped(zipped, zipName, crashType, crashTypeId);
     }
 
     private boolean uploadZipped(byte[] zipped, String fileName, String crashType, int crashTypeId) throws IOException {
@@ -104,9 +128,9 @@ class ReportUploader {
 
     private String getCrashUploadUrl(int size) throws IOException {
         String urlStr = getBaseUrl() + "/api/getCrashUploadUrl"
-                + "?database=" + database
-                + "&appName=" + application
-                + "&appVersion=" + version
+                + "?database=" + urlEncode(database)
+                + "&appName=" + urlEncode(application)
+                + "&appVersion=" + urlEncode(version)
                 + "&crashPostSize=" + size;
 
         HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
@@ -120,7 +144,7 @@ class ReportUploader {
                 Log.w(TAG, "Rate limited by server");
                 return null;
             }
-            if (status != 200) {
+            if (status < 200 || status >= 300) {
                 Log.e(TAG, "getCrashUploadUrl failed (HTTP " + status + ")");
                 return null;
             }
@@ -153,7 +177,7 @@ class ReportUploader {
             }
 
             int status = conn.getResponseCode();
-            if (status != 200) {
+            if (status < 200 || status >= 300) {
                 Log.e(TAG, "S3 PUT failed (HTTP " + status + ")");
                 return false;
             }
@@ -183,7 +207,7 @@ class ReportUploader {
             writeField(baos, boundary, "crashTypeId", String.valueOf(crashTypeId));
             writeField(baos, boundary, "s3key", s3Key);
             writeField(baos, boundary, "md5", md5);
-            baos.write(("--" + boundary + "--\r\n").getBytes("UTF-8"));
+            baos.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
             byte[] payload = baos.toByteArray();
             conn.setRequestProperty("Content-Length", String.valueOf(payload.length));
@@ -209,6 +233,10 @@ class ReportUploader {
 
     // -- Utilities --
 
+    /**
+     * Create a zip containing a single entry. Does not close {@code data};
+     * callers are responsible for closing it.
+     */
     static byte[] createZip(String entryName, InputStream data) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (ZipOutputStream zos = new ZipOutputStream(baos)) {
@@ -219,6 +247,19 @@ class ReportUploader {
                 zos.write(buffer, 0, bytesRead);
             }
             zos.closeEntry();
+        }
+        return baos.toByteArray();
+    }
+
+    /** Create a zip containing multiple entries (name → bytes). */
+    static byte[] createZip(Map<String, byte[]> entries) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
+                zos.putNextEntry(new ZipEntry(entry.getKey()));
+                zos.write(entry.getValue());
+                zos.closeEntry();
+            }
         }
         return baos.toByteArray();
     }
@@ -239,7 +280,7 @@ class ReportUploader {
 
     static String readBody(InputStream stream) throws IOException {
         if (stream == null) return "";
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             StringBuilder sb = new StringBuilder();
             String line;
             while ((line = reader.readLine()) != null) {
@@ -251,9 +292,18 @@ class ReportUploader {
 
     private static void writeField(ByteArrayOutputStream baos, String boundary,
                                    String name, String value) throws IOException {
-        baos.write(("--" + boundary + "\r\n").getBytes("UTF-8"));
-        baos.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n").getBytes("UTF-8"));
-        baos.write(value.getBytes("UTF-8"));
-        baos.write("\r\n".getBytes("UTF-8"));
+        baos.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        baos.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        baos.write(value.getBytes(StandardCharsets.UTF_8));
+        baos.write("\r\n".getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String urlEncode(String value) {
+        try {
+            return java.net.URLEncoder.encode(value, "UTF-8");
+        } catch (java.io.UnsupportedEncodingException e) {
+            // UTF-8 is always supported.
+            throw new AssertionError(e);
+        }
     }
 }

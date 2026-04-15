@@ -156,7 +156,7 @@ public class FeedbackClientTest {
     }
 
     @Test
-    public void postFeedback_withAttachments_includesAttachmentInfo() throws Exception {
+    public void postFeedback_withAttachments_uploadsAttachmentAsZipEntry() throws Exception {
         enqueueSuccessfulUpload();
 
         File tempFile = File.createTempFile("test_attachment", ".txt");
@@ -172,8 +172,16 @@ public class FeedbackClientTest {
         server.takeRequest();
         RecordedRequest putRequest = server.takeRequest();
 
-        String content = extractZipContent(putRequest.getBody().readByteArray(), "feedback.txt");
-        assertTrue("should contain attachment info", content.contains("Attachment: " + tempFile.getName()));
+        // The attachment should be uploaded as its own zip entry alongside feedback.txt
+        byte[] zipData = putRequest.getBody().readByteArray();
+        String attachmentContent = extractZipContent(zipData, tempFile.getName());
+        assertEquals("attachment content", attachmentContent);
+
+        // feedback.txt should still exist but should NOT contain the old
+        // "Attachment: filename" text (attachments are now real zip entries).
+        String feedbackTxt = extractZipContent(zipData, "feedback.txt");
+        assertFalse("feedback.txt should not contain stale Attachment: line",
+                feedbackTxt.contains("Attachment:"));
 
         tempFile.delete();
     }
