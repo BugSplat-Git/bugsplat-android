@@ -28,6 +28,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "BugSplatExample";
     private TextView statusTextView;
     private Button crashButton;
+    private Button anrButton;
     private Button feedbackButton;
     private Button setAttributeButton;
 
@@ -39,6 +40,7 @@ public class MainActivity extends AppCompatActivity {
         // Initialize views
         statusTextView = findViewById(R.id.statusTextView);
         crashButton = findViewById(R.id.crashButton);
+        anrButton = findViewById(R.id.anrButton);
         feedbackButton = findViewById(R.id.feedbackButton);
         setAttributeButton = findViewById(R.id.setAttributeButton);
 
@@ -65,6 +67,22 @@ public class MainActivity extends AppCompatActivity {
                     statusTextView.setText("Error: " + e.getMessage());
                     Toast.makeText(MainActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 }
+            }
+        });
+
+        // Set up click listener for ANR button
+        anrButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Log.d(TAG, "Triggering ANR by blocking main thread for ~10 seconds...");
+                statusTextView.setText("Status: Blocking main thread (ANR will trigger after ~5s)...");
+                // Block the main thread long enough to trigger a system ANR dialog
+                try {
+                    Thread.sleep(10_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                statusTextView.setText("Status: Main thread unblocked");
             }
         });
 

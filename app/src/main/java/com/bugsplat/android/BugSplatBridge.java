@@ -35,6 +35,10 @@ public class BugSplatBridge {
         Log.d("BugSplat", "init result: " +
                 jniInitBugSplat(applicationInfo.dataDir, applicationInfo.nativeLibraryDir, database, application,
                         version, attributes, attachments));
+
+        // Check for ANR reports from previous sessions (Android 11+)
+        AnrReporter anrReporter = new AnrReporter(activity, database, application, version);
+        anrReporter.checkAndReport();
     }
 
     public static void crash() {
