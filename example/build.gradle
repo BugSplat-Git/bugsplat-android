@@ -186,9 +186,11 @@ task uploadBugSplatSymbols {
         
         logger.lifecycle("Uploading symbols for build type: ${buildType}, ABI: ${currentAbi}")
         
-        // Path to the merged native libraries for the current build type
-        def nativeLibsDir = "${buildDir}/intermediates/merged_native_libs/${buildType}/out/lib/${currentAbi}"
-        
+        // Path to the merged native libraries for the current build type.
+        // AGP 8.6+ includes the producing task name in the intermediate path.
+        def mergeTaskName = "merge${buildType.capitalize()}NativeLibs"
+        def nativeLibsDir = "${buildDir}/intermediates/merged_native_libs/${buildType}/${mergeTaskName}/out/lib/${currentAbi}"
+
         // Check if the directory exists
         def nativeLibsDirFile = file(nativeLibsDir)
         if (!nativeLibsDirFile.exists()) {
