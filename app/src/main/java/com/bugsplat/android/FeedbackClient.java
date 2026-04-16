@@ -5,20 +5,22 @@ import android.util.Log;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * Posts User Feedback reports to BugSplat via the 3-part presigned-URL flow.
  *
  * The feedback body is a JSON document ({@code feedback.json}) containing
  * {@code title} and (optionally) {@code description}. Metadata like
- * {@code user}, {@code email}, and {@code appKey} is attached on the
+ * {@code user}, {@code email}, and {@code appKey} are attached on the
  * {@code commitS3CrashUpload} request — not baked into the JSON body.
  *
  * See <a href="https://docs.bugsplat.com/introduction/development/web-services/user-feedback">
@@ -52,40 +54,28 @@ class FeedbackClient {
     boolean postFeedback(String title, String description, String user, String email, String appKey,
                          List<File> attachments, Map<String, String> attributes) {
         try {
-            // Build the feedback.json body — only title (required) and description (optional).
-            // The other fields (user, email, description, appKey, attributes) go on the commit request.
+            // feedback.json — per the User Feedback API, only title (required)
+            // and description (optional) live in the JSON; the rest are
+            // commit-request fields below.
             JSONObject json = new JSONObject();
             json.put("title", title != null ? title : "");
             if (description != null && !description.isEmpty()) {
                 json.put("description", description);
             }
+            byte[] jsonBytes = json.toString().getBytes(StandardCharsets.UTF_8);
 
-            // LinkedHashMap preserves iteration order so feedback.json is first in the zip.
-            Map<String, byte[]> entries = new LinkedHashMap<>();
-            entries.put("feedback.json", json.toString().getBytes(StandardCharsets.UTF_8));
+            byte[] zipped = buildZip(jsonBytes, attachments);
 
-            if (attachments != null) {
-                for (File file : attachments) {
-                    if (file == null || !file.exists() || !file.isFile()) {
-                        Log.w(TAG, "Skipping invalid attachment: " + file);
-                        continue;
-                    }
-                    entries.put(uniqueEntryName(entries, file.getName()), readFileBytes(file));
-                }
-            }
+            CommitOptions options = new CommitOptions()
+                    .crashType(CRASH_TYPE)
+                    .crashTypeId(CRASH_TYPE_ID)
+                    .user(user)
+                    .email(email)
+                    .description(description)
+                    .appKey(appKey)
+                    .attributes(attributes);
 
-            // Extra commit fields per the User Feedback / Crash API docs.
-            Map<String, String> commitFields = new LinkedHashMap<>();
-            if (user != null && !user.isEmpty()) commitFields.put("user", user);
-            if (email != null && !email.isEmpty()) commitFields.put("email", email);
-            if (description != null && !description.isEmpty()) commitFields.put("description", description);
-            if (appKey != null && !appKey.isEmpty()) commitFields.put("appKey", appKey);
-            if (attributes != null && !attributes.isEmpty()) {
-                // Per the API docs, `attributes` is a JSON string of custom attributes.
-                commitFields.put("attributes", new JSONObject(attributes).toString());
-            }
-
-            boolean success = uploader.upload(entries, CRASH_TYPE, CRASH_TYPE_ID, commitFields);
+            boolean success = uploader.upload(zipped, options);
             if (success) {
                 Log.i(TAG, "Feedback posted successfully");
             } else {
@@ -99,31 +89,38 @@ class FeedbackClient {
         }
     }
 
-    private static byte[] readFileBytes(File file) throws IOException {
-        byte[] data = new byte[(int) file.length()];
-        try (FileInputStream fis = new FileInputStream(file)) {
-            int offset = 0;
-            while (offset < data.length) {
-                int read = fis.read(data, offset, data.length - offset);
-                if (read < 0) break;
-                offset += read;
+    /**
+     * Build the feedback zip: feedback.json first, then each attachment
+     * streamed directly from disk (not buffered fully in memory).
+     * Attachment filenames are used as-is for zip entry names — callers are
+     * responsible for ensuring they don't collide with each other or with
+     * {@code feedback.json}.
+     */
+    private static byte[] buildZip(byte[] feedbackJson, List<File> attachments) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            zos.putNextEntry(new ZipEntry("feedback.json"));
+            zos.write(feedbackJson);
+            zos.closeEntry();
+
+            if (attachments != null) {
+                byte[] buffer = new byte[8192];
+                for (File file : attachments) {
+                    if (file == null || !file.exists() || !file.isFile()) {
+                        Log.w(TAG, "Skipping invalid attachment: " + file);
+                        continue;
+                    }
+                    zos.putNextEntry(new ZipEntry(file.getName()));
+                    try (FileInputStream fis = new FileInputStream(file)) {
+                        int n;
+                        while ((n = fis.read(buffer)) != -1) {
+                            zos.write(buffer, 0, n);
+                        }
+                    }
+                    zos.closeEntry();
+                }
             }
         }
-        return data;
-    }
-
-    /** Disambiguate entries if two attachments share a filename. */
-    private static String uniqueEntryName(Map<String, byte[]> entries, String name) {
-        if (!entries.containsKey(name)) return name;
-        int dot = name.lastIndexOf('.');
-        String base = dot > 0 ? name.substring(0, dot) : name;
-        String ext = dot > 0 ? name.substring(dot) : "";
-        int n = 1;
-        String candidate;
-        do {
-            candidate = base + "_" + n + ext;
-            n++;
-        } while (entries.containsKey(candidate));
-        return candidate;
+        return baos.toByteArray();
     }
 }

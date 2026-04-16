@@ -10,6 +10,7 @@ import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -136,12 +137,13 @@ class AnrReporter {
 
             boolean uploaded = false;
             try {
-                uploaded = uploader.upload(
-                        threadDump.getBytes("UTF-8"),
+                byte[] zipped = ReportUploader.zip(
                         "anr_trace.txt",
-                        CRASH_TYPE,
-                        CRASH_TYPE_ID
-                );
+                        threadDump.getBytes(StandardCharsets.UTF_8));
+                CommitOptions options = new CommitOptions()
+                        .crashType(CRASH_TYPE)
+                        .crashTypeId(CRASH_TYPE_ID);
+                uploaded = uploader.upload(zipped, options);
             } catch (IOException e) {
                 Log.e(TAG, "Failed to upload ANR report", e);
             }
@@ -177,7 +179,7 @@ class AnrReporter {
             while ((bytesRead = is.read(buffer)) != -1) {
                 baos.write(buffer, 0, bytesRead);
             }
-            return baos.toString("UTF-8");
+            return new String(baos.toByteArray(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             Log.e(TAG, "Failed to read ANR trace stream", e);
             return null;

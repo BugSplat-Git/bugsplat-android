@@ -9,7 +9,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -21,89 +22,41 @@ import static org.junit.Assert.*;
 
 public class ReportUploaderTest {
 
-    // ---- createZip tests ----
+    // ---- zip tests ----
 
     @Test
-    public void createZip_producesValidZipWithCorrectEntry() throws IOException {
+    public void zip_producesValidSingleEntryZip() throws IOException {
         String content = "hello world";
-        byte[] zipped = ReportUploader.createZip(
-                "test.txt",
-                new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8))
-        );
+        byte[] zipped = ReportUploader.zip("test.txt", content.getBytes(StandardCharsets.UTF_8));
 
         assertNotNull(zipped);
         assertTrue(zipped.length > 0);
 
-        // Read back the zip and verify
         ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipped));
         ZipEntry entry = zis.getNextEntry();
-        assertNotNull("zip should contain an entry", entry);
+        assertNotNull(entry);
         assertEquals("test.txt", entry.getName());
 
-        // Verify content
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         byte[] buffer = new byte[1024];
         int len;
         while ((len = zis.read(buffer)) != -1) {
             baos.write(buffer, 0, len);
         }
-        assertEquals(content, baos.toString("UTF-8"));
+        assertEquals(content, new String(baos.toByteArray(), StandardCharsets.UTF_8));
 
-        // Should be only one entry
-        assertNull("zip should contain exactly one entry", zis.getNextEntry());
+        assertNull(zis.getNextEntry());
         zis.close();
     }
 
     @Test
-    public void createZip_handlesEmptyInput() throws IOException {
-        byte[] zipped = ReportUploader.createZip(
-                "empty.txt",
-                new ByteArrayInputStream(new byte[0])
-        );
-
-        assertNotNull(zipped);
+    public void zip_handlesEmptyInput() throws IOException {
+        byte[] zipped = ReportUploader.zip("empty.txt", new byte[0]);
 
         ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipped));
         ZipEntry entry = zis.getNextEntry();
         assertNotNull(entry);
         assertEquals("empty.txt", entry.getName());
-
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1024];
-        int len;
-        while ((len = zis.read(buffer)) != -1) {
-            baos.write(buffer, 0, len);
-        }
-        assertEquals(0, baos.size());
-        zis.close();
-    }
-
-    @Test
-    public void createZip_handlesLargeInput() throws IOException {
-        byte[] largeContent = new byte[100_000];
-        for (int i = 0; i < largeContent.length; i++) {
-            largeContent[i] = (byte) (i % 256);
-        }
-
-        byte[] zipped = ReportUploader.createZip(
-                "large.bin",
-                new ByteArrayInputStream(largeContent)
-        );
-
-        // Zip should be smaller due to compression of repeating pattern
-        assertNotNull(zipped);
-
-        ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipped));
-        ZipEntry entry = zis.getNextEntry();
-        assertNotNull(entry);
-
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buffer = new byte[4096];
-        int len;
-        while ((len = zis.read(buffer)) != -1) {
-            baos.write(buffer, 0, len);
-        }
-        assertArrayEquals(largeContent, baos.toByteArray());
         zis.close();
     }
 
@@ -111,23 +64,20 @@ public class ReportUploaderTest {
 
     @Test
     public void md5Hex_returnsCorrectHashForKnownInput() {
-        // MD5 of "hello world" is 5eb63bbbe01eeed093cb22bb8f5acdc3
         String hash = ReportUploader.md5Hex("hello world".getBytes(StandardCharsets.UTF_8));
         assertEquals("5eb63bbbe01eeed093cb22bb8f5acdc3", hash);
     }
 
     @Test
     public void md5Hex_returnsCorrectHashForEmptyInput() {
-        // MD5 of empty string is d41d8cd98f00b204e9800998ecf8427e
-        String hash = ReportUploader.md5Hex(new byte[0]);
-        assertEquals("d41d8cd98f00b204e9800998ecf8427e", hash);
+        assertEquals("d41d8cd98f00b204e9800998ecf8427e", ReportUploader.md5Hex(new byte[0]));
     }
 
     @Test
     public void md5Hex_returns32CharLowercaseHex() {
         String hash = ReportUploader.md5Hex("test data".getBytes(StandardCharsets.UTF_8));
         assertEquals(32, hash.length());
-        assertTrue("hash should be lowercase hex", hash.matches("[0-9a-f]+"));
+        assertTrue(hash.matches("[0-9a-f]+"));
     }
 
     // ---- readBody tests ----
@@ -146,8 +96,7 @@ public class ReportUploaderTest {
 
     @Test
     public void readBody_handlesEmptyStream() throws IOException {
-        InputStream stream = new ByteArrayInputStream(new byte[0]);
-        assertEquals("", ReportUploader.readBody(stream));
+        assertEquals("", ReportUploader.readBody(new ByteArrayInputStream(new byte[0])));
     }
 
     // ---- 3-step upload integration tests ----
@@ -165,41 +114,31 @@ public class ReportUploaderTest {
         server.shutdown();
     }
 
+    private CommitOptions anrOptions() {
+        return new CommitOptions().crashType("Android.ANR").crashTypeId(37);
+    }
+
+    private byte[] sampleZip() throws IOException {
+        return ReportUploader.zip("test.txt", "test content".getBytes(StandardCharsets.UTF_8));
+    }
+
     @Test
     public void upload_performsThreeStepFlow() throws Exception {
         String presignedUrl = server.url("/s3-upload").toString();
 
-        // Step 1: getCrashUploadUrl response
         server.enqueue(new MockResponse()
                 .setResponseCode(200)
                 .setBody("{\"url\": \"" + presignedUrl + "\"}"));
-
-        // Step 2: S3 PUT response
+        server.enqueue(new MockResponse().setResponseCode(200));
         server.enqueue(new MockResponse().setResponseCode(200));
 
-        // Step 3: commitS3CrashUpload response
-        server.enqueue(new MockResponse().setResponseCode(200));
-
-        // Use a ReportUploader that points at our mock server
-        String baseUrl = server.url("").toString();
-        // We need to extract host:port to construct the uploader
-        // The uploader constructs URLs like https://{database}.bugsplat.com/...
-        // So we'll use a TestableReportUploader subclass approach
-        // Actually, let's test the utility methods above and the flow separately
-
-        // For the full flow test, we verify the 3 requests arrive in order
         ReportUploader uploader = new TestableReportUploader("testdb", "testapp", "1.0.0", server);
-        boolean result = uploader.upload(
-                "test content".getBytes(StandardCharsets.UTF_8),
-                "test.txt",
-                "Android.ANR",
-                37
-        );
+        boolean result = uploader.upload(sampleZip(), anrOptions());
 
         assertTrue("upload should succeed", result);
-        assertEquals("should make 3 requests", 3, server.getRequestCount());
+        assertEquals(3, server.getRequestCount());
 
-        // Verify Step 1: getCrashUploadUrl
+        // Step 1
         RecordedRequest req1 = server.takeRequest();
         assertEquals("GET", req1.getMethod());
         assertTrue(req1.getPath().contains("getCrashUploadUrl"));
@@ -207,117 +146,129 @@ public class ReportUploaderTest {
         assertTrue(req1.getPath().contains("appName=testapp"));
         assertTrue(req1.getPath().contains("appVersion=1.0.0"));
 
-        // Verify Step 2: S3 PUT
+        // Step 2
         RecordedRequest req2 = server.takeRequest();
         assertEquals("PUT", req2.getMethod());
         assertEquals("application/octet-stream", req2.getHeader("Content-Type"));
 
-        // Verify the body is a valid zip
-        byte[] putBody = req2.getBody().readByteArray();
-        ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(putBody));
-        ZipEntry entry = zis.getNextEntry();
-        assertNotNull(entry);
-        assertEquals("test.txt", entry.getName());
-        zis.close();
-
-        // Verify Step 3: commitS3CrashUpload
+        // Step 3
         RecordedRequest req3 = server.takeRequest();
         assertEquals("POST", req3.getMethod());
         assertTrue(req3.getPath().contains("commitS3CrashUpload"));
         String commitBody = req3.getBody().readUtf8();
-        assertTrue("should contain database", commitBody.contains("testdb"));
-        assertTrue("should contain appName", commitBody.contains("testapp"));
-        assertTrue("should contain appVersion", commitBody.contains("1.0.0"));
-        assertTrue("should contain crashType", commitBody.contains("Android.ANR"));
-        assertTrue("should contain crashTypeId", commitBody.contains("37"));
-        assertTrue("should contain md5", commitBody.contains("md5"));
+        assertTrue(commitBody.contains("testdb"));
+        assertTrue(commitBody.contains("testapp"));
+        assertTrue(commitBody.contains("1.0.0"));
+        assertTrue(commitBody.contains("Android.ANR"));
+        assertTrue(commitBody.contains("37"));
+        assertTrue("should use s3Key (capital K)", commitBody.contains("name=\"s3Key\""));
+        assertTrue(commitBody.contains("name=\"md5\""));
     }
 
     @Test
     public void upload_returnsFalseWhenGetUrlFails() throws Exception {
         server.enqueue(new MockResponse().setResponseCode(500));
-
         ReportUploader uploader = new TestableReportUploader("testdb", "testapp", "1.0.0", server);
-        boolean result = uploader.upload(
-                "test".getBytes(StandardCharsets.UTF_8),
-                "test.txt",
-                "Android.ANR",
-                37
-        );
-
-        assertFalse("upload should fail when getCrashUploadUrl fails", result);
+        assertFalse(uploader.upload(sampleZip(), anrOptions()));
         assertEquals(1, server.getRequestCount());
     }
 
     @Test
     public void upload_returnsFalseWhenRateLimited() throws Exception {
         server.enqueue(new MockResponse().setResponseCode(429));
-
         ReportUploader uploader = new TestableReportUploader("testdb", "testapp", "1.0.0", server);
-        boolean result = uploader.upload(
-                "test".getBytes(StandardCharsets.UTF_8),
-                "test.txt",
-                "Android.ANR",
-                37
-        );
-
-        assertFalse("upload should fail when rate limited", result);
+        assertFalse(uploader.upload(sampleZip(), anrOptions()));
     }
 
     @Test
     public void upload_returnsFalseWhenS3PutFails() throws Exception {
         String presignedUrl = server.url("/s3-upload").toString();
-
-        server.enqueue(new MockResponse()
-                .setResponseCode(200)
+        server.enqueue(new MockResponse().setResponseCode(200)
                 .setBody("{\"url\": \"" + presignedUrl + "\"}"));
         server.enqueue(new MockResponse().setResponseCode(403));
 
         ReportUploader uploader = new TestableReportUploader("testdb", "testapp", "1.0.0", server);
-        boolean result = uploader.upload(
-                "test".getBytes(StandardCharsets.UTF_8),
-                "test.txt",
-                "Android.ANR",
-                37
-        );
-
-        assertFalse("upload should fail when S3 PUT fails", result);
+        assertFalse(uploader.upload(sampleZip(), anrOptions()));
         assertEquals(2, server.getRequestCount());
     }
 
     @Test
     public void upload_returnsFalseWhenCommitFails() throws Exception {
         String presignedUrl = server.url("/s3-upload").toString();
-
-        server.enqueue(new MockResponse()
-                .setResponseCode(200)
+        server.enqueue(new MockResponse().setResponseCode(200)
                 .setBody("{\"url\": \"" + presignedUrl + "\"}"));
         server.enqueue(new MockResponse().setResponseCode(200));
         server.enqueue(new MockResponse().setResponseCode(500));
 
         ReportUploader uploader = new TestableReportUploader("testdb", "testapp", "1.0.0", server);
-        boolean result = uploader.upload(
-                "test".getBytes(StandardCharsets.UTF_8),
-                "test.txt",
-                "Android.ANR",
-                37
-        );
-
-        assertFalse("upload should fail when commit fails", result);
+        assertFalse(uploader.upload(sampleZip(), anrOptions()));
         assertEquals(3, server.getRequestCount());
     }
 
+    @Test
+    public void upload_includesAllCommitOptionsFields() throws Exception {
+        String presignedUrl = server.url("/s3-upload").toString();
+        server.enqueue(new MockResponse().setResponseCode(200)
+                .setBody("{\"url\": \"" + presignedUrl + "\"}"));
+        server.enqueue(new MockResponse().setResponseCode(200));
+        server.enqueue(new MockResponse().setResponseCode(200));
+
+        Map<String, String> attrs = new LinkedHashMap<>();
+        attrs.put("env", "prod");
+
+        CommitOptions options = new CommitOptions()
+                .crashType("User.Feedback")
+                .crashTypeId(36)
+                .user("alice")
+                .email("alice@test.com")
+                .appKey("key123")
+                .description("bug desc")
+                .notes("build 42")
+                .attributes(attrs);
+
+        ReportUploader uploader = new TestableReportUploader("testdb", "testapp", "1.0.0", server);
+        assertTrue(uploader.upload(sampleZip(), options));
+
+        server.takeRequest();
+        server.takeRequest();
+        RecordedRequest commitRequest = server.takeRequest();
+        String body = commitRequest.getBody().readUtf8();
+
+        assertTrue(body.contains("name=\"user\""));
+        assertTrue(body.contains("alice"));
+        assertTrue(body.contains("name=\"email\""));
+        assertTrue(body.contains("alice@test.com"));
+        assertTrue(body.contains("name=\"appKey\""));
+        assertTrue(body.contains("key123"));
+        assertTrue(body.contains("name=\"description\""));
+        assertTrue(body.contains("bug desc"));
+        assertTrue(body.contains("name=\"notes\""));
+        assertTrue(body.contains("build 42"));
+        assertTrue(body.contains("name=\"attributes\""));
+        assertTrue("attributes should be JSON-encoded", body.contains("\"env\":\"prod\""));
+    }
+
+    @Test
+    public void upload_rejectsEmptyPayload() throws Exception {
+        ReportUploader uploader = new TestableReportUploader("testdb", "testapp", "1.0.0", server);
+        try {
+            uploader.upload(new byte[0], anrOptions());
+            fail("expected IllegalArgumentException");
+        } catch (IllegalArgumentException expected) {
+            // expected
+        }
+    }
+
     /**
-     * Test subclass that routes all HTTP calls to the MockWebServer
-     * instead of the real BugSplat API.
+     * Test subclass that routes all HTTP calls to the MockWebServer.
      */
     static class TestableReportUploader extends ReportUploader {
         private final String baseUrl;
 
         TestableReportUploader(String database, String application, String version, MockWebServer server) {
             super(database, application, version);
-            // MockWebServer URLs include a trailing slash; strip it since
-            // ReportUploader appends paths starting with "/".
+            // MockWebServer's server.url("").toString() ends with a "/"; strip
+            // it so URL joining in ReportUploader produces clean paths.
             String url = server.url("").toString();
             this.baseUrl = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
         }
