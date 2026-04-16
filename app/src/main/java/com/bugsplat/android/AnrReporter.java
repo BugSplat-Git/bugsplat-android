@@ -34,7 +34,7 @@ class AnrReporter {
     private static final String TAG = "BugSplat-ANR";
     private static final String PREFS_NAME = "bugsplat_anr";
     private static final String PREF_LAST_REPORTED_TIMESTAMP = "last_reported_anr_timestamp";
-    private static final String CRASH_TYPE = "Android ANR";
+    private static final String CRASH_TYPE = "Android.ANR";
     private static final int CRASH_TYPE_ID = 37;
 
     private final Context context;

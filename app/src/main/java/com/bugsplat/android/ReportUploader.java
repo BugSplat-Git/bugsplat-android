@@ -53,7 +53,7 @@ class ReportUploader {
      * Upload a file using the 3-part S3 upload flow.
      *
      * @param file       The file to upload
-     * @param crashType  The crash type string (e.g. "Android ANR", "UserFeedback")
+     * @param crashType  The crash type string (e.g. "Android.ANR", "User.Feedback")
      * @param crashTypeId The crash type ID
      * @return true if the upload succeeded
      */
@@ -69,7 +69,7 @@ class ReportUploader {
      *
      * @param data       The data to upload
      * @param fileName   The filename for the zip entry
-     * @param crashType  The crash type string (e.g. "Android ANR", "UserFeedback")
+     * @param crashType  The crash type string (e.g. "Android.ANR", "User.Feedback")
      * @param crashTypeId The crash type ID
      * @return true if the upload succeeded
      */
@@ -81,7 +81,6 @@ class ReportUploader {
     /**
      * Upload multiple entries packed into a single zip using the 3-part S3 upload flow.
      * Entries are added to the zip in the iteration order of {@code entries}.
-     * Used by feedback uploads which bundle the report + attached files into one zip.
      *
      * @param entries    Map of zip-entry name to bytes. Must not be empty.
      * @param crashType  The crash type string
@@ -89,16 +88,30 @@ class ReportUploader {
      * @return true if the upload succeeded
      */
     boolean upload(Map<String, byte[]> entries, String crashType, int crashTypeId) throws IOException {
+        return upload(entries, crashType, crashTypeId, null);
+    }
+
+    /**
+     * Upload multiple entries as a zip, with optional extra metadata fields
+     * included on the commitS3CrashUpload request (e.g. {@code user},
+     * {@code email}, {@code appKey}).
+     */
+    boolean upload(Map<String, byte[]> entries, String crashType, int crashTypeId,
+                   Map<String, String> extraCommitFields) throws IOException {
         if (entries == null || entries.isEmpty()) {
             throw new IllegalArgumentException("entries must not be empty");
         }
         byte[] zipped = createZip(entries);
-        // Use the first entry's name as the zip label for logging
         String zipName = entries.keySet().iterator().next();
-        return uploadZipped(zipped, zipName, crashType, crashTypeId);
+        return uploadZipped(zipped, zipName, crashType, crashTypeId, extraCommitFields);
     }
 
     private boolean uploadZipped(byte[] zipped, String fileName, String crashType, int crashTypeId) throws IOException {
+        return uploadZipped(zipped, fileName, crashType, crashTypeId, null);
+    }
+
+    private boolean uploadZipped(byte[] zipped, String fileName, String crashType, int crashTypeId,
+                                 Map<String, String> extraCommitFields) throws IOException {
         String md5 = md5Hex(zipped);
 
         // Step 1: Get presigned upload URL
@@ -117,7 +130,7 @@ class ReportUploader {
         Log.d(TAG, "Uploaded " + fileName + " to S3 (" + zipped.length + " bytes)");
 
         // Step 3: Commit
-        if (!commitUpload(presignedUrl, crashType, crashTypeId, md5)) {
+        if (!commitUpload(presignedUrl, crashType, crashTypeId, md5, extraCommitFields)) {
             Log.e(TAG, "Failed to commit upload");
             return false;
         }
@@ -187,7 +200,8 @@ class ReportUploader {
         }
     }
 
-    private boolean commitUpload(String s3Key, String crashType, int crashTypeId, String md5) throws IOException {
+    private boolean commitUpload(String s3Key, String crashType, int crashTypeId, String md5,
+                                 Map<String, String> extraFields) throws IOException {
         String urlStr = getBaseUrl() + "/api/commitS3CrashUpload";
         String boundary = java.util.UUID.randomUUID().toString();
 
@@ -205,8 +219,15 @@ class ReportUploader {
             writeField(baos, boundary, "appVersion", version);
             writeField(baos, boundary, "crashType", crashType);
             writeField(baos, boundary, "crashTypeId", String.valueOf(crashTypeId));
-            writeField(baos, boundary, "s3key", s3Key);
+            writeField(baos, boundary, "s3Key", s3Key);
             writeField(baos, boundary, "md5", md5);
+            if (extraFields != null) {
+                for (Map.Entry<String, String> e : extraFields.entrySet()) {
+                    if (e.getValue() != null && !e.getValue().isEmpty()) {
+                        writeField(baos, boundary, e.getKey(), e.getValue());
+                    }
+                }
+            }
             baos.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
             byte[] payload = baos.toByteArray();

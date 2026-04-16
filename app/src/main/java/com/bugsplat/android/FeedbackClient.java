@@ -2,6 +2,9 @@ package com.bugsplat.android;
 
 import android.util.Log;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -10,14 +13,22 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Posts User Feedback reports to BugSplat via the 3-part presigned-URL flow.
+ *
+ * The feedback body is a JSON document ({@code feedback.json}) containing
+ * {@code title} and (optionally) {@code description}. Metadata like
+ * {@code user}, {@code email}, and {@code appKey} is attached on the
+ * {@code commitS3CrashUpload} request — not baked into the JSON body.
+ *
+ * See <a href="https://docs.bugsplat.com/introduction/development/web-services/user-feedback">
+ * BugSplat User Feedback docs</a>.
+ */
 class FeedbackClient {
     private static final String TAG = "BugSplat";
-    private static final String CRASH_TYPE = "UserFeedback";
+    private static final String CRASH_TYPE = "User.Feedback";
     private static final int CRASH_TYPE_ID = 36;
 
-    private final String database;
-    private final String application;
-    private final String version;
     private final ReportUploader uploader;
 
     FeedbackClient(String database, String application, String version) {
@@ -26,38 +37,32 @@ class FeedbackClient {
 
     /** Package-private constructor for testing with a custom uploader. */
     FeedbackClient(String database, String application, String version, ReportUploader uploader) {
-        this.database = database;
-        this.application = application;
-        this.version = version;
         this.uploader = uploader;
     }
 
     boolean postFeedback(String title, String description, String user, String email, String appKey) {
-        return postFeedback(title, description, user, email, appKey, null);
+        return postFeedback(title, description, user, email, appKey, null, null);
     }
 
-    boolean postFeedback(String title, String description, String user, String email, String appKey, List<File> attachments) {
+    boolean postFeedback(String title, String description, String user, String email, String appKey,
+                         List<File> attachments) {
+        return postFeedback(title, description, user, email, appKey, attachments, null);
+    }
+
+    boolean postFeedback(String title, String description, String user, String email, String appKey,
+                         List<File> attachments, Map<String, String> attributes) {
         try {
-            // Build a simple text report with the feedback fields.
-            StringBuilder report = new StringBuilder();
-            report.append("Title: ").append(title != null ? title : "").append("\n");
+            // Build the feedback.json body — only title (required) and description (optional).
+            // The other fields (user, email, description, appKey, attributes) go on the commit request.
+            JSONObject json = new JSONObject();
+            json.put("title", title != null ? title : "");
             if (description != null && !description.isEmpty()) {
-                report.append("Description: ").append(description).append("\n");
-            }
-            if (user != null && !user.isEmpty()) {
-                report.append("User: ").append(user).append("\n");
-            }
-            if (email != null && !email.isEmpty()) {
-                report.append("Email: ").append(email).append("\n");
-            }
-            if (appKey != null && !appKey.isEmpty()) {
-                report.append("AppKey: ").append(appKey).append("\n");
+                json.put("description", description);
             }
 
-            // Pack the report plus any attachment bytes into a single zip
-            // (LinkedHashMap preserves insertion order so feedback.txt is first).
+            // LinkedHashMap preserves iteration order so feedback.json is first in the zip.
             Map<String, byte[]> entries = new LinkedHashMap<>();
-            entries.put("feedback.txt", report.toString().getBytes(StandardCharsets.UTF_8));
+            entries.put("feedback.json", json.toString().getBytes(StandardCharsets.UTF_8));
 
             if (attachments != null) {
                 for (File file : attachments) {
@@ -69,7 +74,18 @@ class FeedbackClient {
                 }
             }
 
-            boolean success = uploader.upload(entries, CRASH_TYPE, CRASH_TYPE_ID);
+            // Extra commit fields per the User Feedback / Crash API docs.
+            Map<String, String> commitFields = new LinkedHashMap<>();
+            if (user != null && !user.isEmpty()) commitFields.put("user", user);
+            if (email != null && !email.isEmpty()) commitFields.put("email", email);
+            if (description != null && !description.isEmpty()) commitFields.put("description", description);
+            if (appKey != null && !appKey.isEmpty()) commitFields.put("appKey", appKey);
+            if (attributes != null && !attributes.isEmpty()) {
+                // Per the API docs, `attributes` is a JSON string of custom attributes.
+                commitFields.put("attributes", new JSONObject(attributes).toString());
+            }
+
+            boolean success = uploader.upload(entries, CRASH_TYPE, CRASH_TYPE_ID, commitFields);
             if (success) {
                 Log.i(TAG, "Feedback posted successfully");
             } else {
@@ -77,7 +93,7 @@ class FeedbackClient {
             }
             return success;
 
-        } catch (Exception e) {
+        } catch (JSONException | IOException e) {
             Log.e(TAG, "Failed to post feedback", e);
             return false;
         }

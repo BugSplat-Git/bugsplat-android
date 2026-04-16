@@ -192,7 +192,7 @@ public class ReportUploaderTest {
         boolean result = uploader.upload(
                 "test content".getBytes(StandardCharsets.UTF_8),
                 "test.txt",
-                "Android ANR",
+                "Android.ANR",
                 37
         );
 
@@ -228,7 +228,7 @@ public class ReportUploaderTest {
         assertTrue("should contain database", commitBody.contains("testdb"));
         assertTrue("should contain appName", commitBody.contains("testapp"));
         assertTrue("should contain appVersion", commitBody.contains("1.0.0"));
-        assertTrue("should contain crashType", commitBody.contains("Android ANR"));
+        assertTrue("should contain crashType", commitBody.contains("Android.ANR"));
         assertTrue("should contain crashTypeId", commitBody.contains("37"));
         assertTrue("should contain md5", commitBody.contains("md5"));
     }
@@ -241,7 +241,7 @@ public class ReportUploaderTest {
         boolean result = uploader.upload(
                 "test".getBytes(StandardCharsets.UTF_8),
                 "test.txt",
-                "Android ANR",
+                "Android.ANR",
                 37
         );
 
@@ -257,7 +257,7 @@ public class ReportUploaderTest {
         boolean result = uploader.upload(
                 "test".getBytes(StandardCharsets.UTF_8),
                 "test.txt",
-                "Android ANR",
+                "Android.ANR",
                 37
         );
 
@@ -277,7 +277,7 @@ public class ReportUploaderTest {
         boolean result = uploader.upload(
                 "test".getBytes(StandardCharsets.UTF_8),
                 "test.txt",
-                "Android ANR",
+                "Android.ANR",
                 37
         );
 
@@ -299,7 +299,7 @@ public class ReportUploaderTest {
         boolean result = uploader.upload(
                 "test".getBytes(StandardCharsets.UTF_8),
                 "test.txt",
-                "Android ANR",
+                "Android.ANR",
                 37
         );
 

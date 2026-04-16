@@ -321,7 +321,7 @@ The BugSplat Android SDK automatically detects and reports Application Not Respo
 
 ### How It Works
 
-When the system kills your app due to an ANR, the event is recorded by Android. On the next app launch, the SDK queries `ActivityManager.getHistoricalProcessExitReasons()` for new ANRs, reads the system-provided thread dump, and uploads it to BugSplat. ANR reports appear alongside crashes with the **"Android ANR"** type.
+When the system kills your app due to an ANR, the event is recorded by Android. On the next app launch, the SDK queries `ActivityManager.getHistoricalProcessExitReasons()` for new ANRs, reads the system-provided thread dump, and uploads it to BugSplat. ANR reports appear alongside crashes with the **"Android.ANR"** type.
 
 The thread dump includes:
 - Full Java stack traces for all threads in the process

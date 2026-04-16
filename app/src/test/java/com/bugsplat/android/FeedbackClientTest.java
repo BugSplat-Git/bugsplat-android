@@ -1,5 +1,6 @@
 package com.bugsplat.android;
 
+import org.json.JSONObject;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -8,7 +9,6 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -38,7 +38,8 @@ public class FeedbackClientTest {
         ReportUploader uploader = new ReportUploader("testdb", "testapp", "1.0.0") {
             @Override
             String getBaseUrl() {
-                return server.url("").toString();
+                String url = server.url("").toString();
+                return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
             }
         };
         return new FeedbackClient("testdb", "testapp", "1.0.0", uploader);
@@ -53,84 +54,56 @@ public class FeedbackClientTest {
     }
 
     @Test
-    public void postFeedback_includesAllFieldsInReport() throws Exception {
+    public void feedbackBodyIsJson_withTitleAndDescription() throws Exception {
         enqueueSuccessfulUpload();
 
         FeedbackClient client = createClient();
-        boolean result = client.postFeedback("Bug Report", "App crashed on login", "alice", "alice@test.com", "key123");
+        boolean result = client.postFeedback("Bug Report", "App crashed on login", null, null, null);
 
         assertTrue(result);
 
-        // Skip step 1 (getCrashUploadUrl), inspect step 2 (S3 PUT) for the content
         server.takeRequest(); // getCrashUploadUrl
         RecordedRequest putRequest = server.takeRequest();
 
-        String content = extractZipContent(putRequest.getBody().readByteArray(), "feedback.txt");
-        assertTrue("should contain title", content.contains("Title: Bug Report"));
-        assertTrue("should contain description", content.contains("Description: App crashed on login"));
-        assertTrue("should contain user", content.contains("User: alice"));
-        assertTrue("should contain email", content.contains("Email: alice@test.com"));
-        assertTrue("should contain appKey", content.contains("AppKey: key123"));
+        String json = extractZipContent(putRequest.getBody().readByteArray(), "feedback.json");
+        JSONObject parsed = new JSONObject(json);
+        assertEquals("Bug Report", parsed.getString("title"));
+        assertEquals("App crashed on login", parsed.getString("description"));
     }
 
     @Test
-    public void postFeedback_omitsNullOptionalFields() throws Exception {
+    public void feedbackBody_omitsDescriptionWhenNullOrEmpty() throws Exception {
         enqueueSuccessfulUpload();
 
         FeedbackClient client = createClient();
-        boolean result = client.postFeedback("Bug Report", null, null, null, null);
-
-        assertTrue(result);
+        client.postFeedback("Bug Report", null, null, null, null);
 
         server.takeRequest();
         RecordedRequest putRequest = server.takeRequest();
 
-        String content = extractZipContent(putRequest.getBody().readByteArray(), "feedback.txt");
-        assertTrue("should contain title", content.contains("Title: Bug Report"));
-        assertFalse("should not contain Description:", content.contains("Description:"));
-        assertFalse("should not contain User:", content.contains("User:"));
-        assertFalse("should not contain Email:", content.contains("Email:"));
-        assertFalse("should not contain AppKey:", content.contains("AppKey:"));
+        String json = extractZipContent(putRequest.getBody().readByteArray(), "feedback.json");
+        JSONObject parsed = new JSONObject(json);
+        assertEquals("Bug Report", parsed.getString("title"));
+        assertFalse("should not include description when null", parsed.has("description"));
     }
 
     @Test
-    public void postFeedback_omitsEmptyOptionalFields() throws Exception {
+    public void feedbackBody_handlesNullTitleAsEmptyString() throws Exception {
         enqueueSuccessfulUpload();
 
         FeedbackClient client = createClient();
-        boolean result = client.postFeedback("Bug Report", "", "", "", "");
-
-        assertTrue(result);
+        client.postFeedback(null, "desc", null, null, null);
 
         server.takeRequest();
         RecordedRequest putRequest = server.takeRequest();
 
-        String content = extractZipContent(putRequest.getBody().readByteArray(), "feedback.txt");
-        assertTrue("should contain title", content.contains("Title: Bug Report"));
-        assertFalse("should not contain Description:", content.contains("Description:"));
-        assertFalse("should not contain User:", content.contains("User:"));
-        assertFalse("should not contain Email:", content.contains("Email:"));
-        assertFalse("should not contain AppKey:", content.contains("AppKey:"));
+        String json = extractZipContent(putRequest.getBody().readByteArray(), "feedback.json");
+        JSONObject parsed = new JSONObject(json);
+        assertEquals("", parsed.getString("title"));
     }
 
     @Test
-    public void postFeedback_handlesNullTitle() throws Exception {
-        enqueueSuccessfulUpload();
-
-        FeedbackClient client = createClient();
-        boolean result = client.postFeedback(null, "some description", null, null, null);
-
-        assertTrue(result);
-
-        server.takeRequest();
-        RecordedRequest putRequest = server.takeRequest();
-
-        String content = extractZipContent(putRequest.getBody().readByteArray(), "feedback.txt");
-        assertTrue("should contain empty title", content.contains("Title: \n"));
-    }
-
-    @Test
-    public void postFeedback_commitUsesCorrectCrashType() throws Exception {
+    public void commitRequest_usesUserDotFeedbackCrashType() throws Exception {
         enqueueSuccessfulUpload();
 
         FeedbackClient client = createClient();
@@ -141,8 +114,67 @@ public class FeedbackClientTest {
         RecordedRequest commitRequest = server.takeRequest();
 
         String body = commitRequest.getBody().readUtf8();
-        assertTrue("should use UserFeedback crash type", body.contains("UserFeedback"));
+        assertTrue("should use User.Feedback crash type", body.contains("User.Feedback"));
         assertTrue("should use crash type id 36", body.contains("36"));
+    }
+
+    @Test
+    public void commitRequest_includesOptionalUserEmailAppKey() throws Exception {
+        enqueueSuccessfulUpload();
+
+        FeedbackClient client = createClient();
+        client.postFeedback("Title", "some desc", "alice", "alice@test.com", "key123");
+
+        server.takeRequest();
+        server.takeRequest();
+        RecordedRequest commitRequest = server.takeRequest();
+
+        String body = commitRequest.getBody().readUtf8();
+        assertTrue("commit should include user", body.contains("alice"));
+        assertTrue("commit should include email", body.contains("alice@test.com"));
+        assertTrue("commit should include appKey", body.contains("key123"));
+        // description is mirrored on the commit (per User Feedback API docs)
+        assertTrue("commit should include description", body.contains("some desc"));
+    }
+
+    @Test
+    public void commitRequest_includesAttributesAsJsonString() throws Exception {
+        enqueueSuccessfulUpload();
+
+        java.util.Map<String, String> attributes = new java.util.LinkedHashMap<>();
+        attributes.put("env", "prod");
+        attributes.put("tier", "premium");
+
+        FeedbackClient client = createClient();
+        client.postFeedback("Title", null, null, null, null, null, attributes);
+
+        server.takeRequest();
+        server.takeRequest();
+        RecordedRequest commitRequest = server.takeRequest();
+
+        String body = commitRequest.getBody().readUtf8();
+        // The attributes field is a JSON string (per the commit API docs).
+        assertTrue("commit should include attributes field", body.contains("name=\"attributes\""));
+        assertTrue("commit attributes should be JSON-encoded", body.contains("\"env\":\"prod\""));
+        assertTrue("commit attributes should include tier", body.contains("\"tier\":\"premium\""));
+    }
+
+    @Test
+    public void commitRequest_omitsOptionalFieldsWhenNullOrEmpty() throws Exception {
+        enqueueSuccessfulUpload();
+
+        FeedbackClient client = createClient();
+        client.postFeedback("Title", null, null, null, null);
+
+        server.takeRequest();
+        server.takeRequest();
+        RecordedRequest commitRequest = server.takeRequest();
+
+        String body = commitRequest.getBody().readUtf8();
+        assertFalse("should not include user field", body.contains("name=\"user\""));
+        assertFalse("should not include email field", body.contains("name=\"email\""));
+        assertFalse("should not include appKey field", body.contains("name=\"appKey\""));
+        assertFalse("should not include attributes field", body.contains("name=\"attributes\""));
     }
 
     @Test
@@ -172,16 +204,14 @@ public class FeedbackClientTest {
         server.takeRequest();
         RecordedRequest putRequest = server.takeRequest();
 
-        // The attachment should be uploaded as its own zip entry alongside feedback.txt
         byte[] zipData = putRequest.getBody().readByteArray();
         String attachmentContent = extractZipContent(zipData, tempFile.getName());
         assertEquals("attachment content", attachmentContent);
 
-        // feedback.txt should still exist but should NOT contain the old
-        // "Attachment: filename" text (attachments are now real zip entries).
-        String feedbackTxt = extractZipContent(zipData, "feedback.txt");
-        assertFalse("feedback.txt should not contain stale Attachment: line",
-                feedbackTxt.contains("Attachment:"));
+        // feedback.json should still be valid JSON with just title/description
+        String json = extractZipContent(zipData, "feedback.json");
+        JSONObject parsed = new JSONObject(json);
+        assertEquals("Bug", parsed.getString("title"));
 
         tempFile.delete();
     }
