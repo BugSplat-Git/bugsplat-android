@@ -102,15 +102,65 @@ After completing these steps, you can start using BugSplat in your Android appli
 
 ### Configuration
 
-To configure BugSplat to handle native crashes, simply call `initBugSplat` with the desired arguments. Be sure that the value you provide for `database` matches the value in the BugSplat web app.
+To configure BugSplat to handle native crashes, simply call `BugSplat.init` with the desired arguments. Be sure that the value you provide for `database` matches the value in the BugSplat web app.
 
 ```kotlin
-BugSplatBridge.initBugSplat(this, database, application, version)
+BugSplat.init(this, database, application, version)
 ```
 
-You can also add file attributes, and/or file attachments to your crash reports.
+### Loading config from local.properties (recommended)
 
-Kotlin
+Keeping your database name, app name, and version in one place avoids drift between runtime (`BugSplat.init`) and symbol upload. The pattern most BugSplat users adopt:
+
+1. Add the database name to the gitignored `local.properties`:
+
+   ```properties
+   bugsplat.database=your_database
+   ```
+
+2. In your app module's `build.gradle`, load it and expose it (plus `applicationId` and `versionName`) as `BuildConfig` fields:
+
+   ```gradle
+   def localProps = new Properties()
+   def localPropsFile = rootProject.file('local.properties')
+   if (localPropsFile.exists()) {
+       localPropsFile.withInputStream { localProps.load(it) }
+   }
+
+   android {
+       defaultConfig {
+           applicationId "com.example.myapp"
+           versionName "1.0.0"
+
+           buildConfigField "String", "BUGSPLAT_DATABASE",
+               "\"${localProps.getProperty('bugsplat.database')}\""
+           buildConfigField "String", "BUGSPLAT_APP_NAME",
+               "\"${applicationId}\""
+           buildConfigField "String", "BUGSPLAT_APP_VERSION",
+               "\"${versionName}\""
+       }
+       buildFeatures { buildConfig true }
+   }
+   ```
+
+3. Initialize BugSplat from the generated `BuildConfig`:
+
+   ```java
+   BugSplat.init(
+       this,
+       BuildConfig.BUGSPLAT_DATABASE,
+       BuildConfig.BUGSPLAT_APP_NAME,
+       BuildConfig.BUGSPLAT_APP_VERSION
+   );
+   ```
+
+See [`example/build.gradle`](example/build.gradle) for the complete working setup. This same `bugsplat.database` value is also picked up by the symbol upload task, so there's a single source of truth across the whole build.
+
+### Attributes and attachments
+
+You can also add custom attributes and/or file attachments to your crash reports.
+
+**Kotlin**
 ```kotlin
 val attributes = mapOf(
     "key1" to "value1",
@@ -118,27 +168,36 @@ val attributes = mapOf(
     "environment" to "development"
 )
 
-val attachmentFileName = "log.txt"
-createAttachmentFile(attachmentFileName)
-val attachmentPath = applicationContext.getFileStreamPath(attachmentFileName).absolutePath
+val attachmentPath = applicationContext.getFileStreamPath("log.txt").absolutePath
 val attachments = arrayOf(attachmentPath)
 
-BugSplatBridge.initBugSplat(this, "fred", "my-android-crasher", "2.0.0", attributes, attachments)
+BugSplat.init(
+    this,
+    BuildConfig.BUGSPLAT_DATABASE,
+    BuildConfig.BUGSPLAT_APP_NAME,
+    BuildConfig.BUGSPLAT_APP_VERSION,
+    attributes,
+    attachments
+)
 ```
 
-Java
+**Java**
 ```java
 Map<String, String> attributes = new HashMap<>();
 attributes.put("key1", "value1");
-attributes.put("key2", "value2");
 attributes.put("environment", "development");
 
-String attachmentFileName = "log.txt";
-createAttachmentFile(attachmentFileName);
-String attachmentPath = getApplicationContext().getFileStreamPath(attachmentFileName).getAbsolutePath();
+String attachmentPath = getApplicationContext().getFileStreamPath("log.txt").getAbsolutePath();
 String[] attachments = new String[]{attachmentPath};
 
-BugSplatBridge.initBugSplat(this, "fred", "my-android-crasher", "2.0.0", attributes, attachments);
+BugSplat.init(
+    this,
+    BuildConfig.BUGSPLAT_DATABASE,
+    BuildConfig.BUGSPLAT_APP_NAME,
+    BuildConfig.BUGSPLAT_APP_VERSION,
+    attributes,
+    attachments
+);
 ```
 
 ### Symbol Upload
@@ -355,14 +414,14 @@ BugSplat supports collecting non-crashing user feedback such as bug reports and 
 
 ### Posting Feedback
 
-Use `BugSplat.postFeedback` to submit feedback asynchronously, or `BugSplat.postFeedbackBlocking` for synchronous submission:
+Use `BugSplat.postFeedback` to submit feedback asynchronously, or `BugSplat.postFeedbackBlocking` for synchronous submission. The `database`, `application`, and `version` values are typically loaded from `BuildConfig` (see [Loading config from local.properties](#loading-config-from-localproperties-recommended)):
 
 ```java
 // Async (returns immediately, runs on background thread)
 BugSplat.postFeedback(
-    "fred",                    // database
-    "my-android-crasher",      // application
-    "1.0.0",                   // version
+    BuildConfig.BUGSPLAT_DATABASE,
+    BuildConfig.BUGSPLAT_APP_NAME,
+    BuildConfig.BUGSPLAT_APP_VERSION,
     "Login button broken",     // title (required)
     "Nothing happens on tap",  // description
     "Jane",                    // user
@@ -372,7 +431,9 @@ BugSplat.postFeedback(
 
 // Blocking (returns true on success)
 boolean success = BugSplat.postFeedbackBlocking(
-    "fred", "my-android-crasher", "1.0.0",
+    BuildConfig.BUGSPLAT_DATABASE,
+    BuildConfig.BUGSPLAT_APP_NAME,
+    BuildConfig.BUGSPLAT_APP_VERSION,
     "Login button broken", "Nothing happens on tap",
     "Jane", "jane@example.com", null
 );
@@ -388,10 +449,32 @@ attachments.add(new File(getFilesDir(), "screenshot.png"));
 attachments.add(new File(getFilesDir(), "app.log"));
 
 BugSplat.postFeedback(
-    "fred", "my-android-crasher", "1.0.0",
+    BuildConfig.BUGSPLAT_DATABASE,
+    BuildConfig.BUGSPLAT_APP_NAME,
+    BuildConfig.BUGSPLAT_APP_VERSION,
     "Login button broken", "Nothing happens on tap",
     "Jane", "jane@example.com", null,
     attachments
+);
+```
+
+### Custom Attributes
+
+Attach arbitrary key/value metadata to feedback reports:
+
+```java
+Map<String, String> attributes = new HashMap<>();
+attributes.put("environment", "production");
+attributes.put("user_tier", "premium");
+
+BugSplat.postFeedback(
+    BuildConfig.BUGSPLAT_DATABASE,
+    BuildConfig.BUGSPLAT_APP_NAME,
+    BuildConfig.BUGSPLAT_APP_VERSION,
+    "Login button broken", "Nothing happens on tap",
+    "Jane", "jane@example.com", null,
+    null,        // attachments
+    attributes
 );
 ```
 
