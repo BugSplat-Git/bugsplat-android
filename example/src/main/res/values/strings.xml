@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">BugSplat Example</string>
     <string name="crash_button">Crash App</string>
+    <string name="anr_button">Trigger ANR</string>
     <string name="feedback_button">Send Feedback</string>
     <string name="set_attribute_button">Set Attribute</string>
 </resources> 

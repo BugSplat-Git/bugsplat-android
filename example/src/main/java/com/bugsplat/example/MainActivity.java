@@ -28,6 +28,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "BugSplatExample";
     private TextView statusTextView;
     private Button crashButton;
+    private Button anrButton;
     private Button feedbackButton;
     private Button setAttributeButton;
 
@@ -39,6 +40,7 @@ public class MainActivity extends AppCompatActivity {
         // Initialize views
         statusTextView = findViewById(R.id.statusTextView);
         crashButton = findViewById(R.id.crashButton);
+        anrButton = findViewById(R.id.anrButton);
         feedbackButton = findViewById(R.id.feedbackButton);
         setAttributeButton = findViewById(R.id.setAttributeButton);
 
@@ -65,6 +67,22 @@ public class MainActivity extends AppCompatActivity {
                     statusTextView.setText("Error: " + e.getMessage());
                     Toast.makeText(MainActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 }
+            }
+        });
+
+        // Set up click listener for ANR button
+        anrButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Log.d(TAG, "Triggering ANR via native hang...");
+                Toast.makeText(MainActivity.this,
+                        "Tap the screen to trigger the ANR dialog", Toast.LENGTH_SHORT).show();
+                // BugSplat.hang() blocks the main thread in a native infinite loop,
+                // so the resulting ANR thread dump includes a symbolicated C++ frame.
+                // Tap the screen to trigger the ANR dialog, then choose "Close app"
+                // to kill the process. The ANR will be captured via ApplicationExitInfo
+                // and uploaded on next launch.
+                BugSplat.hang();
             }
         });
 

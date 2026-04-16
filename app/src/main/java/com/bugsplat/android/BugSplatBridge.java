@@ -35,10 +35,22 @@ public class BugSplatBridge {
         Log.d("BugSplat", "init result: " +
                 jniInitBugSplat(applicationInfo.dataDir, applicationInfo.nativeLibraryDir, database, application,
                         version, attributes, attachments));
+
+        // Check for ANR reports from previous sessions (Android 11+)
+        AnrReporter anrReporter = new AnrReporter(activity, database, application, version);
+        anrReporter.checkAndReport();
     }
 
     public static void crash() {
         jniCrash();
+    }
+
+    /**
+     * Hang the calling thread in a native infinite loop. Intended for testing
+     * ANR detection and symbolication of native frames.
+     */
+    public static void hang() {
+        jniHang();
     }
 
     public static void setAttribute(String key, String value) {
@@ -65,6 +77,8 @@ public class BugSplatBridge {
             String version, Map<String, String> attributes, String[] attachments);
 
     static native void jniCrash();
+
+    static native void jniHang();
 
     static native void jniSetAttribute(String key, String value);
 

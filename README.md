@@ -102,15 +102,65 @@ After completing these steps, you can start using BugSplat in your Android appli
 
 ### Configuration
 
-To configure BugSplat to handle native crashes, simply call `initBugSplat` with the desired arguments. Be sure that the value you provide for `database` matches the value in the BugSplat web app.
+To configure BugSplat to handle native crashes, simply call `BugSplat.init` with the desired arguments. Be sure that the value you provide for `database` matches the value in the BugSplat web app.
 
 ```kotlin
-BugSplatBridge.initBugSplat(this, database, application, version)
+BugSplat.init(this, database, application, version)
 ```
 
-You can also add file attributes, and/or file attachments to your crash reports.
+### Loading config from local.properties (recommended)
 
-Kotlin
+Keeping your database name, app name, and version in one place avoids drift between runtime (`BugSplat.init`) and symbol upload. The pattern most BugSplat users adopt:
+
+1. Add the database name to the gitignored `local.properties`:
+
+   ```properties
+   bugsplat.database=your_database
+   ```
+
+2. In your app module's `build.gradle`, load it and expose it (plus `applicationId` and `versionName`) as `BuildConfig` fields:
+
+   ```gradle
+   def localProps = new Properties()
+   def localPropsFile = rootProject.file('local.properties')
+   if (localPropsFile.exists()) {
+       localPropsFile.withInputStream { localProps.load(it) }
+   }
+
+   android {
+       defaultConfig {
+           applicationId "com.example.myapp"
+           versionName "1.0.0"
+
+           buildConfigField "String", "BUGSPLAT_DATABASE",
+               "\"${localProps.getProperty('bugsplat.database')}\""
+           buildConfigField "String", "BUGSPLAT_APP_NAME",
+               "\"${applicationId}\""
+           buildConfigField "String", "BUGSPLAT_APP_VERSION",
+               "\"${versionName}\""
+       }
+       buildFeatures { buildConfig true }
+   }
+   ```
+
+3. Initialize BugSplat from the generated `BuildConfig`:
+
+   ```java
+   BugSplat.init(
+       this,
+       BuildConfig.BUGSPLAT_DATABASE,
+       BuildConfig.BUGSPLAT_APP_NAME,
+       BuildConfig.BUGSPLAT_APP_VERSION
+   );
+   ```
+
+See [`example/build.gradle`](example/build.gradle) for the complete working setup. This same `bugsplat.database` value is also picked up by the symbol upload task, so there's a single source of truth across the whole build.
+
+### Attributes and attachments
+
+You can also add custom attributes and/or file attachments to your crash reports.
+
+**Kotlin**
 ```kotlin
 val attributes = mapOf(
     "key1" to "value1",
@@ -118,27 +168,36 @@ val attributes = mapOf(
     "environment" to "development"
 )
 
-val attachmentFileName = "log.txt"
-createAttachmentFile(attachmentFileName)
-val attachmentPath = applicationContext.getFileStreamPath(attachmentFileName).absolutePath
+val attachmentPath = applicationContext.getFileStreamPath("log.txt").absolutePath
 val attachments = arrayOf(attachmentPath)
 
-BugSplatBridge.initBugSplat(this, "fred", "my-android-crasher", "2.0.0", attributes, attachments)
+BugSplat.init(
+    this,
+    BuildConfig.BUGSPLAT_DATABASE,
+    BuildConfig.BUGSPLAT_APP_NAME,
+    BuildConfig.BUGSPLAT_APP_VERSION,
+    attributes,
+    attachments
+)
 ```
 
-Java
+**Java**
 ```java
 Map<String, String> attributes = new HashMap<>();
 attributes.put("key1", "value1");
-attributes.put("key2", "value2");
 attributes.put("environment", "development");
 
-String attachmentFileName = "log.txt";
-createAttachmentFile(attachmentFileName);
-String attachmentPath = getApplicationContext().getFileStreamPath(attachmentFileName).getAbsolutePath();
+String attachmentPath = getApplicationContext().getFileStreamPath("log.txt").getAbsolutePath();
 String[] attachments = new String[]{attachmentPath};
 
-BugSplatBridge.initBugSplat(this, "fred", "my-android-crasher", "2.0.0", attributes, attachments);
+BugSplat.init(
+    this,
+    BuildConfig.BUGSPLAT_DATABASE,
+    BuildConfig.BUGSPLAT_APP_NAME,
+    BuildConfig.BUGSPLAT_APP_VERSION,
+    attributes,
+    attachments
+);
 ```
 
 ### Symbol Upload
@@ -173,68 +232,56 @@ This approach requires the `symbol-upload` executable to be included in your app
 
 #### 2. Using Gradle Build Tasks
 
-You can also add a Gradle task to your build process to automatically upload symbols when you build your app. Here's an example of how to set this up:
+You can wire symbol upload into your Gradle build so it runs automatically after `assembleDebug` / `assembleRelease`. The recommended pattern is to keep credentials out of `build.gradle` by loading them from the gitignored `local.properties`.
+
+**Step 1 — Add credentials to `local.properties` (do not commit):**
+
+```properties
+bugsplat.database=your_database
+bugsplat.clientId=your_client_id
+bugsplat.clientSecret=your_client_secret
+```
+
+**Step 2 — Load them in `build.gradle` and register per-ABI upload tasks:**
 
 ```gradle
-// BugSplat configuration
+// Load BugSplat credentials from local.properties
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+
 ext {
-    bugsplatDatabase = "your_database_name" // Replace with your BugSplat database name
-    bugsplatAppName = "your_app_name"       // Replace with your application name
+    bugsplatDatabase = localProps.getProperty('bugsplat.database')
+    bugsplatClientId = localProps.getProperty('bugsplat.clientId', '')
+    bugsplatClientSecret = localProps.getProperty('bugsplat.clientSecret', '')
+    // Use applicationId and versionName as the single source of truth
+    bugsplatAppName = android.defaultConfig.applicationId
     bugsplatAppVersion = android.defaultConfig.versionName
-    // Optional: Add your BugSplat API credentials for symbol upload
-    bugsplatClientId = ""     // Replace with your BugSplat API client ID (optional)
-    bugsplatClientSecret = "" // Replace with your BugSplat API client secret (optional)
 }
 
-// Task to upload debug symbols for native libraries
-task uploadBugSplatSymbols {
-    doLast {
-        // Path to the merged native libraries
-        def nativeLibsDir = "${buildDir}/intermediates/merged_native_libs/debug/out/lib"
-        
-        // Check if the directory exists
-        def nativeLibsDirFile = file(nativeLibsDir)
-        if (!nativeLibsDirFile.exists()) {
-            logger.warn("Native libraries directory not found: ${nativeLibsDir}")
-            return
-        }
-        
-        // Path to the symbol-upload executable
-        def symbolUploadPath = "path/to/symbol-upload" // Adjust this path
-        
-        // Build the command with the directory and glob pattern
-        def command = [
-            symbolUploadPath,
-            "-b", project.ext.bugsplatDatabase,
-            "-a", project.ext.bugsplatAppName,
-            "-v", project.ext.bugsplatAppVersion,
-            "-d", nativeLibsDirFile.absolutePath,
-            "-f", "**/*.so",
-            "-m"  // Run dumpsyms
-        ]
-        
-        // Add client credentials if provided
-        if (project.ext.has('bugsplatClientId') && project.ext.bugsplatClientId) {
-            command.add("-i")
-            command.add(project.ext.bugsplatClientId)
-            command.add("-s")
-            command.add(project.ext.bugsplatClientSecret)
-        }
-        
-        // Execute the command
-        // ... (see example app for full implementation)
-    }
-}
+// See example/build.gradle for the full implementation including:
+//   - resolveSymbolUploadExecutable()   - downloads the symbol-upload binary
+//   - uploadSymbolsForAbi(buildType, abi) - runs symbol-upload against
+//     build/intermediates/merged_native_libs/<buildType>/merge<BuildType>NativeLibs/out/lib/<abi>/
+//   - Per-ABI tasks (uploadBugSplatSymbolsDebugArm64-v8a, etc.)
+//   - AllAbis task that chains the per-ABI tasks serially via mustRunAfter
+//     (parallel uploads aren't safe — the symbol-upload binary uses a shared temp dir)
 
-// Run the symbol upload task after the assembleDebug task
+// Run symbol upload after assembleDebug
 tasks.whenTaskAdded { task ->
     if (task.name == 'assembleDebug') {
-        task.finalizedBy(uploadBugSplatSymbols)
+        task.finalizedBy(tasks.named('uploadBugSplatSymbolsDebugAllAbis'))
     }
 }
 ```
 
-See the [Example App README](example/README.md) for a complete implementation of this approach.
+See [`example/build.gradle`](example/build.gradle) for the complete, working implementation. Key details:
+
+- **Intermediate path** — AGP 8.6+ places merged native libs at `merged_native_libs/<buildType>/merge<BuildType>NativeLibs/out/lib/<abi>/`. Older AGPs used a flat `merged_native_libs/<buildType>/out/lib/<abi>/` layout.
+- **Serial execution** — the `symbol-upload` binary uses a shared temp directory, so per-ABI uploads must be chained via `mustRunAfter` rather than running in parallel.
+- **Missing ABIs** — when Android Studio runs on a single-ABI device (e.g. an arm64 emulator), only that ABI's libs get built. Per-ABI tasks for other ABIs will log a warning and skip cleanly.
 
 #### 3. Using the Command-Line Tool
 
@@ -327,20 +374,54 @@ When integrating BugSplat into your Android application, it's crucial to ensure 
 
 These configurations ensure that the BugSplat native libraries are properly included in your app and can function correctly to capture and report native crashes.
 
+## ANR Detection 🐌
+
+The BugSplat Android SDK automatically detects and reports Application Not Responding (ANR) events on Android 11+ (API level 30+) using the [`ApplicationExitInfo`](https://developer.android.com/reference/android/app/ApplicationExitInfo) API.
+
+### How It Works
+
+When the system kills your app due to an ANR, the event is recorded by Android. On the next app launch, the SDK queries `ActivityManager.getHistoricalProcessExitReasons()` for new ANRs, reads the system-provided thread dump, and uploads it to BugSplat. ANR reports appear alongside crashes with the **"Android.ANR"** type.
+
+The thread dump includes:
+- Full Java stack traces for all threads in the process
+- Native stack frames with BuildIds (symbolicated against uploaded `.sym` files)
+- Lock contention information (which threads are holding/waiting for locks)
+
+### Configuration
+
+ANR detection is enabled automatically when you call `BugSplat.init()` — no additional configuration needed. The SDK persists the timestamp of the last reported ANR in `SharedPreferences` to avoid duplicate uploads across launches.
+
+### Testing ANR Detection
+
+To test ANR detection, use `BugSplat.hang()` to block the main thread in a native infinite loop:
+
+```java
+// Call this on the main thread to trigger an ANR
+BugSplat.hang();
+```
+
+After calling `BugSplat.hang()`, tap the screen to generate a pending input event — the system will show an ANR dialog after ~5 seconds. Choose "Close app" to kill the process. On the next app launch, the SDK will upload the ANR report to BugSplat.
+
+The resulting thread dump includes a native frame for `jniHang`, which demonstrates end-to-end symbolication when your `.sym` files have been uploaded.
+
+### Supported Versions
+
+ANR detection requires **Android 11+ (API 30+)**. On older Android versions, the `ApplicationExitInfo` API is unavailable and ANR detection is silently disabled.
+
 ## User Feedback 💬
 
 BugSplat supports collecting non-crashing user feedback such as bug reports and feature requests. Feedback reports appear in BugSplat alongside crash reports with the "User Feedback" type.
 
 ### Posting Feedback
 
-Use `BugSplat.postFeedback` to submit feedback asynchronously, or `BugSplat.postFeedbackBlocking` for synchronous submission:
+Use `BugSplat.postFeedback` to submit feedback asynchronously, or `BugSplat.postFeedbackBlocking` for synchronous submission. The `database`, `application`, and `version` values are typically loaded from `BuildConfig` (see [Loading config from local.properties](#loading-config-from-localproperties-recommended)):
 
 ```java
 // Async (returns immediately, runs on background thread)
 BugSplat.postFeedback(
-    "fred",                    // database
-    "my-android-crasher",      // application
-    "1.0.0",                   // version
+    BuildConfig.BUGSPLAT_DATABASE,
+    BuildConfig.BUGSPLAT_APP_NAME,
+    BuildConfig.BUGSPLAT_APP_VERSION,
     "Login button broken",     // title (required)
     "Nothing happens on tap",  // description
     "Jane",                    // user
@@ -350,7 +431,9 @@ BugSplat.postFeedback(
 
 // Blocking (returns true on success)
 boolean success = BugSplat.postFeedbackBlocking(
-    "fred", "my-android-crasher", "1.0.0",
+    BuildConfig.BUGSPLAT_DATABASE,
+    BuildConfig.BUGSPLAT_APP_NAME,
+    BuildConfig.BUGSPLAT_APP_VERSION,
     "Login button broken", "Nothing happens on tap",
     "Jane", "jane@example.com", null
 );
@@ -366,10 +449,32 @@ attachments.add(new File(getFilesDir(), "screenshot.png"));
 attachments.add(new File(getFilesDir(), "app.log"));
 
 BugSplat.postFeedback(
-    "fred", "my-android-crasher", "1.0.0",
+    BuildConfig.BUGSPLAT_DATABASE,
+    BuildConfig.BUGSPLAT_APP_NAME,
+    BuildConfig.BUGSPLAT_APP_VERSION,
     "Login button broken", "Nothing happens on tap",
     "Jane", "jane@example.com", null,
     attachments
+);
+```
+
+### Custom Attributes
+
+Attach arbitrary key/value metadata to feedback reports:
+
+```java
+Map<String, String> attributes = new HashMap<>();
+attributes.put("environment", "production");
+attributes.put("user_tier", "premium");
+
+BugSplat.postFeedback(
+    BuildConfig.BUGSPLAT_DATABASE,
+    BuildConfig.BUGSPLAT_APP_NAME,
+    BuildConfig.BUGSPLAT_APP_VERSION,
+    "Login button broken", "Nothing happens on tap",
+    "Jane", "jane@example.com", null,
+    null,        // attachments
+    attributes
 );
 ```
 
@@ -392,7 +497,9 @@ To run the example app:
 The example app demonstrates:
 - Automatically initializing the BugSplat SDK at app startup
 - Triggering a crash for testing purposes
+- Triggering an ANR (via `BugSplat.hang()`) to test ANR detection and native frame symbolication
 - Submitting user feedback via a dialog
+- Setting custom attributes via a dialog
 - Handling errors during initialization
 
 For more information, see the [Example App README](example/README.md).

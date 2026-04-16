@@ -72,6 +72,16 @@ public class BugSplat {
     }
 
     /**
+     * Hang the calling thread indefinitely in a native infinite loop.
+     * Intended for testing ANR detection — call this from the main thread
+     * to trigger a system ANR with several symbolicated native frames in
+     * the resulting thread dump.
+     */
+    public static void hang() {
+        BugSplatBridge.hang();
+    }
+
+    /**
      * Set a custom attribute that will be included in crash reports.
      * This can be called at any time after init, and the value will be
      * captured in the next crash report.
@@ -203,9 +213,31 @@ public class BugSplat {
     public static void postFeedback(String database, String application, String version,
                                     String title, String description, String user, String email,
                                     String appKey, List<File> attachments) {
+        postFeedback(database, application, version, title, description, user, email, appKey, attachments, null);
+    }
+
+    /**
+     * Post user feedback to BugSplat with file attachments and custom attributes.
+     * This runs on a background thread and returns immediately.
+     *
+     * @param database The BugSplat database name
+     * @param application The application name
+     * @param version The application version
+     * @param title The feedback title (becomes the stack key for grouping)
+     * @param description Additional feedback context
+     * @param user The user's name or id
+     * @param email The user's email
+     * @param appKey The application key for authentication
+     * @param attachments List of files to attach to the feedback report, or null for none
+     * @param attributes Custom key/value attributes to associate with the feedback, or null for none
+     */
+    public static void postFeedback(String database, String application, String version,
+                                    String title, String description, String user, String email,
+                                    String appKey, List<File> attachments,
+                                    Map<String, String> attributes) {
         new Thread(() -> {
             FeedbackClient client = new FeedbackClient(database, application, version);
-            client.postFeedback(title, description, user, email, appKey, attachments);
+            client.postFeedback(title, description, user, email, appKey, attachments, attributes);
         }).start();
     }
 
@@ -247,7 +279,30 @@ public class BugSplat {
     public static boolean postFeedbackBlocking(String database, String application, String version,
                                                String title, String description, String user, String email,
                                                String appKey, List<File> attachments) {
+        return postFeedbackBlocking(database, application, version, title, description, user, email, appKey, attachments, null);
+    }
+
+    /**
+     * Post user feedback to BugSplat with file attachments and custom attributes.
+     * This blocks until the upload is complete.
+     *
+     * @param database The BugSplat database name
+     * @param application The application name
+     * @param version The application version
+     * @param title The feedback title (becomes the stack key for grouping)
+     * @param description Additional feedback context
+     * @param user The user's name or id
+     * @param email The user's email
+     * @param appKey The application key for authentication
+     * @param attachments List of files to attach to the feedback report, or null for none
+     * @param attributes Custom key/value attributes to associate with the feedback, or null for none
+     * @return true if feedback was posted successfully
+     */
+    public static boolean postFeedbackBlocking(String database, String application, String version,
+                                               String title, String description, String user, String email,
+                                               String appKey, List<File> attachments,
+                                               Map<String, String> attributes) {
         FeedbackClient client = new FeedbackClient(database, application, version);
-        return client.postFeedback(title, description, user, email, appKey, attachments);
+        return client.postFeedback(title, description, user, email, appKey, attachments, attributes);
     }
 } 

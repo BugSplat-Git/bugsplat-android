@@ -46,6 +46,10 @@ jobs:
 
     # Build with Gradle using the Android SDK's CMake
     - name: Build with Gradle
+      env:
+        # The example module requires a bugsplat.database value to configure.
+        # CI doesn't upload symbols, so a placeholder is fine.
+        BUGSPLAT_DATABASE: fred
       run: ./gradlew assembleDebug --no-daemon
 
     - name: Perform CodeQL Analysis

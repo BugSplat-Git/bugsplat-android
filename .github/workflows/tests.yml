@@ -1,0 +1,32 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Install Android SDK CMake
+      run: |
+        echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "cmake;3.22.1"
+        echo "$ANDROID_HOME/cmake/3.22.1/bin" >> $GITHUB_PATH
+
+    - name: Run unit tests
+      env:
+        # The example module requires a bugsplat.database value to configure.
+        # CI doesn't upload symbols, so a placeholder is fine.
+        BUGSPLAT_DATABASE: fred
+      run: ./gradlew :app:testDebugUnitTest --no-daemon
