@@ -80,7 +80,7 @@ mavenPublishing {
     publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)
     signAllPublications()
 
-    coordinates("com.bugsplat", "bugsplat-android", "1.2.1")
+    coordinates("com.bugsplat", "bugsplat-android", "1.3.0")
 
     pom {
         name = "BugSplat Android"
