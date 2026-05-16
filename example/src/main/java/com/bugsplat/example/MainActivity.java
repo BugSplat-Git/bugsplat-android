@@ -2,10 +2,13 @@ package com.bugsplat.example;
 
 import android.os.Bundle;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -32,6 +35,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView statusTextView;
     private TextView sdkVersionTextView;
     private TextView connectedTextView;
+    private LinearLayout recentActivityContainer;
+    private TextView recentActivityEmpty;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,6 +46,8 @@ public class MainActivity extends AppCompatActivity {
         statusTextView = findViewById(R.id.statusTextView);
         sdkVersionTextView = findViewById(R.id.sdkVersionTextView);
         connectedTextView = findViewById(R.id.connectedTextView);
+        recentActivityContainer = findViewById(R.id.recentActivityContainer);
+        recentActivityEmpty = findViewById(R.id.recentActivityEmpty);
 
         sdkVersionTextView.setText(getString(R.string.demo_sdk_version_format, BuildConfig.BUGSPLAT_SDK_VERSION));
 
@@ -74,9 +81,16 @@ public class MainActivity extends AppCompatActivity {
         connectedTextView.setText(connected ? R.string.demo_status_connected : R.string.demo_status_disconnected);
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        renderRecentActivity();
+    }
+
     private void triggerCrash() {
         try {
             Log.d(TAG, "Triggering crash...");
+            ActivityLog.record(this, ActivityLog.TYPE_CRASH, getString(R.string.activity_crash_detail));
             BugSplat.crash();
         } catch (UnsatisfiedLinkError e) {
             Log.e(TAG, "Native method not found", e);
@@ -92,6 +106,7 @@ public class MainActivity extends AppCompatActivity {
     private void triggerHang() {
         Log.d(TAG, "Triggering ANR via native hang...");
         Toast.makeText(this, "Tap the screen to trigger the ANR dialog", Toast.LENGTH_SHORT).show();
+        ActivityLog.record(this, ActivityLog.TYPE_HANG, getString(R.string.activity_hang_detail));
         // BugSplat.hang() blocks the main thread in a native infinite loop, producing
         // a symbolicated C++ frame in the resulting ANR dump.
         BugSplat.hang();
@@ -105,6 +120,9 @@ public class MainActivity extends AppCompatActivity {
             Log.e(TAG, "Caught non-crash exception", e);
             statusTextView.setText("Caught: " + e.getClass().getSimpleName() + " — app still running");
             Toast.makeText(this, "Exception caught", Toast.LENGTH_SHORT).show();
+            ActivityLog.record(this, ActivityLog.TYPE_ERROR,
+                    e.getClass().getSimpleName() + " caught");
+            renderRecentActivity();
         }
     }
 
@@ -181,6 +199,11 @@ public class MainActivity extends AppCompatActivity {
                         if (success) {
                             statusTextView.setText("Feedback sent — thank you!");
                             Toast.makeText(this, "Feedback sent!", Toast.LENGTH_SHORT).show();
+                            String detail = title.isEmpty()
+                                    ? getString(R.string.activity_feedback_detail_blank)
+                                    : getString(R.string.activity_feedback_detail_format, title);
+                            ActivityLog.record(this, ActivityLog.TYPE_FEEDBACK, detail);
+                            renderRecentActivity();
                         } else {
                             statusTextView.setText("Failed to send feedback");
                             Toast.makeText(this, "Failed to send feedback", Toast.LENGTH_SHORT).show();
@@ -248,6 +271,68 @@ public class MainActivity extends AppCompatActivity {
         } else {
             Log.d(TAG, "Library " + libraryName + " does not exist in " + directory.getAbsolutePath());
         }
+    }
+
+    private void renderRecentActivity() {
+        List<ActivityLog.Entry> entries = ActivityLog.getAll(this);
+        recentActivityContainer.removeAllViews();
+
+        if (entries.isEmpty()) {
+            recentActivityEmpty.setVisibility(View.VISIBLE);
+            recentActivityContainer.setVisibility(View.GONE);
+            return;
+        }
+
+        recentActivityEmpty.setVisibility(View.GONE);
+        recentActivityContainer.setVisibility(View.VISIBLE);
+
+        LayoutInflater inflater = LayoutInflater.from(this);
+        long now = System.currentTimeMillis();
+        for (int i = 0; i < entries.size(); i++) {
+            ActivityLog.Entry entry = entries.get(i);
+            View row = inflater.inflate(R.layout.item_activity_row, recentActivityContainer, false);
+            if (i > 0) {
+                ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) row.getLayoutParams();
+                lp.topMargin = (int) (10 * getResources().getDisplayMetrics().density);
+                row.setLayoutParams(lp);
+            }
+            row.findViewById(R.id.activityDot).setBackgroundResource(dotForType(entry.type));
+            ((TextView) row.findViewById(R.id.activityLabel)).setText(labelForType(entry.type));
+            ((TextView) row.findViewById(R.id.activityDetail)).setText(entry.detail);
+            ((TextView) row.findViewById(R.id.activityTime)).setText(formatRelativeTime(now, entry.timestampMs));
+            recentActivityContainer.addView(row);
+        }
+    }
+
+    private int dotForType(String type) {
+        switch (type) {
+            case ActivityLog.TYPE_CRASH: return R.drawable.dot_activity_crash;
+            case ActivityLog.TYPE_ERROR: return R.drawable.dot_activity_error;
+            case ActivityLog.TYPE_FEEDBACK: return R.drawable.dot_activity_feedback;
+            case ActivityLog.TYPE_HANG: return R.drawable.dot_activity_error;
+            default: return R.drawable.dot_activity_error;
+        }
+    }
+
+    private int labelForType(String type) {
+        switch (type) {
+            case ActivityLog.TYPE_CRASH: return R.string.activity_crash_label;
+            case ActivityLog.TYPE_ERROR: return R.string.activity_error_label;
+            case ActivityLog.TYPE_FEEDBACK: return R.string.activity_feedback_label;
+            case ActivityLog.TYPE_HANG: return R.string.activity_hang_label;
+            default: return R.string.activity_error_label;
+        }
+    }
+
+    private String formatRelativeTime(long nowMs, long thenMs) {
+        long deltaMs = Math.max(0, nowMs - thenMs);
+        long minutes = deltaMs / 60_000L;
+        if (minutes < 1) return getString(R.string.activity_time_just_now);
+        if (minutes < 60) return getString(R.string.activity_time_minutes_ago, (int) minutes);
+        long hours = minutes / 60;
+        if (hours < 24) return getString(R.string.activity_time_hours_ago, (int) hours);
+        long days = hours / 24;
+        return getString(R.string.activity_time_days_ago, (int) days);
     }
 
     private void initializeBugSplat() {

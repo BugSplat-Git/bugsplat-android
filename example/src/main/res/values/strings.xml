@@ -23,16 +23,21 @@
     <string name="card_hang_title">Hang</string>
     <string name="card_hang_subtitle">Freeze main thread for 8 seconds</string>
 
-    <!-- Sample recent activity -->
+    <!-- Recent activity -->
+    <string name="activity_empty">No events yet — tap a card above to get started.</string>
     <string name="activity_crash_label">Crash</string>
-    <string name="activity_crash_detail">2,420 grouped · v0.4.1</string>
-    <string name="activity_crash_time">2m ago</string>
     <string name="activity_error_label">Error</string>
-    <string name="activity_error_detail">NullReferenceException · i…</string>
-    <string name="activity_error_time">11m ago</string>
     <string name="activity_feedback_label">Feedback</string>
-    <string name="activity_feedback_detail">iOS keyboard collapses aft…</string>
-    <string name="activity_feedback_time">1h ago</string>
+    <string name="activity_hang_label">Hang</string>
+    <string name="activity_crash_detail">Native crash triggered</string>
+    <string name="activity_error_detail">NullPointerException caught</string>
+    <string name="activity_hang_detail">Main thread frozen</string>
+    <string name="activity_feedback_detail_format">"%1$s"</string>
+    <string name="activity_feedback_detail_blank">Feedback submitted</string>
+    <string name="activity_time_just_now">just now</string>
+    <string name="activity_time_minutes_ago">%1$dm ago</string>
+    <string name="activity_time_hours_ago">%1$dh ago</string>
+    <string name="activity_time_days_ago">%1$dd ago</string>
 
     <!-- Legacy (unused by new layout but kept for any references) -->
     <string name="crash_button">Crash App</string>

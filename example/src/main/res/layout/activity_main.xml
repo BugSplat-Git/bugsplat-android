@@ -174,131 +174,21 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- Activity row: Crash -->
             <LinearLayout
+                android:id="@+id/recentActivityContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="vertical" />
 
-                <View
-                    android:layout_width="8dp"
-                    android:layout_height="8dp"
-                    android:layout_marginEnd="12dp"
-                    android:background="@drawable/dot_activity_crash" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="14dp"
-                    android:text="@string/activity_crash_label"
-                    android:textColor="@color/demo_text_primary"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:text="@string/activity_crash_detail"
-                    android:textColor="@color/demo_text_secondary"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
-                    android:text="@string/activity_crash_time"
-                    android:textColor="@color/demo_text_tertiary"
-                    android:textSize="13sp" />
-            </LinearLayout>
-
-            <!-- Activity row: Error -->
-            <LinearLayout
+            <TextView
+                android:id="@+id/recentActivityEmpty"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <View
-                    android:layout_width="8dp"
-                    android:layout_height="8dp"
-                    android:layout_marginEnd="12dp"
-                    android:background="@drawable/dot_activity_error" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="14dp"
-                    android:text="@string/activity_error_label"
-                    android:textColor="@color/demo_text_primary"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:text="@string/activity_error_detail"
-                    android:textColor="@color/demo_text_secondary"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
-                    android:text="@string/activity_error_time"
-                    android:textColor="@color/demo_text_tertiary"
-                    android:textSize="13sp" />
-            </LinearLayout>
-
-            <!-- Activity row: Feedback -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <View
-                    android:layout_width="8dp"
-                    android:layout_height="8dp"
-                    android:layout_marginEnd="12dp"
-                    android:background="@drawable/dot_activity_feedback" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="14dp"
-                    android:text="@string/activity_feedback_label"
-                    android:textColor="@color/demo_text_primary"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:text="@string/activity_feedback_detail"
-                    android:textColor="@color/demo_text_secondary"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
-                    android:text="@string/activity_feedback_time"
-                    android:textColor="@color/demo_text_tertiary"
-                    android:textSize="13sp" />
-            </LinearLayout>
+                android:layout_marginTop="14dp"
+                android:text="@string/activity_empty"
+                android:textColor="@color/demo_text_tertiary"
+                android:textSize="14sp" />
         </LinearLayout>
 
         <TextView
