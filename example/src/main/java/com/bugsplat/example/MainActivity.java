@@ -3,12 +3,14 @@ package com.bugsplat.example;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.DrawableRes;
+import androidx.annotation.StringRes;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -26,71 +28,84 @@ import java.util.Locale;
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "BugSplatExample";
+
     private TextView statusTextView;
-    private Button crashButton;
-    private Button anrButton;
-    private Button feedbackButton;
-    private Button setAttributeButton;
+    private TextView sdkVersionTextView;
+    private TextView connectedTextView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Initialize views
         statusTextView = findViewById(R.id.statusTextView);
-        crashButton = findViewById(R.id.crashButton);
-        anrButton = findViewById(R.id.anrButton);
-        feedbackButton = findViewById(R.id.feedbackButton);
-        setAttributeButton = findViewById(R.id.setAttributeButton);
+        sdkVersionTextView = findViewById(R.id.sdkVersionTextView);
+        connectedTextView = findViewById(R.id.connectedTextView);
 
-        // Log native library directories
+        sdkVersionTextView.setText(getString(R.string.demo_sdk_version_format, BuildConfig.BUGSPLAT_SDK_VERSION));
+
+        bindCard(R.id.crashCard, R.drawable.splat_crash,
+                R.string.card_crash_title, R.string.card_crash_subtitle, v -> triggerCrash());
+        bindCard(R.id.errorCard, R.drawable.splat_error,
+                R.string.card_error_title, R.string.card_error_subtitle, v -> triggerNonCrashError());
+        bindCard(R.id.feedbackCard, R.drawable.splat_feedback,
+                R.string.card_feedback_title, R.string.card_feedback_subtitle, v -> showFeedbackDialog());
+        bindCard(R.id.hangCard, R.drawable.splat_hang,
+                R.string.card_hang_title, R.string.card_hang_subtitle, v -> triggerHang());
+
+        findViewById(R.id.viewDashboardTextView).setOnClickListener(v ->
+                Toast.makeText(this, "Open BugSplat dashboard", Toast.LENGTH_SHORT).show());
+
         logNativeLibraryInfo();
-
-        // Initialize BugSplat at app start
         initializeBugSplat();
+    }
 
-        // Set up click listener for crash button
-        crashButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                try {
-                    // Cause a crash using BugSplat's crash method
-                    Log.d(TAG, "Triggering crash...");
-                    BugSplat.crash();
-                } catch (UnsatisfiedLinkError e) {
-                    Log.e(TAG, "Native method not found", e);
-                    statusTextView.setText("Error: Native method not found - " + e.getMessage());
-                    Toast.makeText(MainActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                } catch (Exception e) {
-                    Log.e(TAG, "Error triggering crash", e);
-                    statusTextView.setText("Error: " + e.getMessage());
-                    Toast.makeText(MainActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                }
-            }
-        });
+    private void bindCard(int cardId, @DrawableRes int iconRes,
+                          @StringRes int titleRes, @StringRes int subtitleRes,
+                          View.OnClickListener onClick) {
+        View card = findViewById(cardId);
+        ((ImageView) card.findViewById(R.id.cardIcon)).setImageResource(iconRes);
+        ((TextView) card.findViewById(R.id.cardTitle)).setText(titleRes);
+        ((TextView) card.findViewById(R.id.cardSubtitle)).setText(subtitleRes);
+        card.setOnClickListener(onClick);
+    }
 
-        // Set up click listener for ANR button
-        anrButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Log.d(TAG, "Triggering ANR via native hang...");
-                Toast.makeText(MainActivity.this,
-                        "Tap the screen to trigger the ANR dialog", Toast.LENGTH_SHORT).show();
-                // BugSplat.hang() blocks the main thread in a native infinite loop,
-                // so the resulting ANR thread dump includes a symbolicated C++ frame.
-                // Tap the screen to trigger the ANR dialog, then choose "Close app"
-                // to kill the process. The ANR will be captured via ApplicationExitInfo
-                // and uploaded on next launch.
-                BugSplat.hang();
-            }
-        });
+    private void setConnected(boolean connected) {
+        connectedTextView.setText(connected ? R.string.demo_status_connected : R.string.demo_status_disconnected);
+    }
 
-        // Set up click listener for feedback button
-        feedbackButton.setOnClickListener(v -> showFeedbackDialog());
+    private void triggerCrash() {
+        try {
+            Log.d(TAG, "Triggering crash...");
+            BugSplat.crash();
+        } catch (UnsatisfiedLinkError e) {
+            Log.e(TAG, "Native method not found", e);
+            statusTextView.setText("Error: Native method not found - " + e.getMessage());
+            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            Log.e(TAG, "Error triggering crash", e);
+            statusTextView.setText("Error: " + e.getMessage());
+            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
 
-        // Set up click listener for set attribute button
-        setAttributeButton.setOnClickListener(v -> showSetAttributeDialog());
+    private void triggerHang() {
+        Log.d(TAG, "Triggering ANR via native hang...");
+        Toast.makeText(this, "Tap the screen to trigger the ANR dialog", Toast.LENGTH_SHORT).show();
+        // BugSplat.hang() blocks the main thread in a native infinite loop, producing
+        // a symbolicated C++ frame in the resulting ANR dump.
+        BugSplat.hang();
+    }
+
+    private void triggerNonCrashError() {
+        try {
+            String value = null;
+            value.length();
+        } catch (Exception e) {
+            Log.e(TAG, "Caught non-crash exception", e);
+            statusTextView.setText("Caught: " + e.getClass().getSimpleName() + " — app still running");
+            Toast.makeText(this, "Exception caught", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void showSetAttributeDialog() {
@@ -200,11 +215,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void logNativeLibraryInfo() {
         try {
-            // Log application native library directory
             File nativeLibDir = new File(getApplicationInfo().nativeLibraryDir);
             Log.d(TAG, "Native library directory: " + nativeLibDir.getAbsolutePath());
 
-            // List all files in the native library directory
             if (nativeLibDir.exists() && nativeLibDir.isDirectory()) {
                 File[] files = nativeLibDir.listFiles();
                 if (files != null) {
@@ -219,13 +232,10 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG, "Native library directory does not exist or is not a directory");
             }
 
-            // Check for specific libraries
             checkLibrary(nativeLibDir, "libbugsplat.so");
             checkLibrary(nativeLibDir, "libcrashpad_handler.so");
 
-            // Log library search path
             Log.d(TAG, "Library search path: " + System.getProperty("java.library.path"));
-
         } catch (Exception e) {
             Log.e(TAG, "Error logging native library info", e);
         }
@@ -242,37 +252,29 @@ public class MainActivity extends AppCompatActivity {
 
     private void initializeBugSplat() {
         try {
-            // Log BugSplat configuration from BuildConfig
             Log.d(TAG, "BugSplat Configuration:");
             Log.d(TAG, "  Database: " + BuildConfig.BUGSPLAT_DATABASE);
             Log.d(TAG, "  Application: " + BuildConfig.BUGSPLAT_APP_NAME);
             Log.d(TAG, "  Version: " + BuildConfig.BUGSPLAT_APP_VERSION);
 
             Log.d(TAG, "Initializing BugSplat...");
-            // Initialize BugSplat with values from BuildConfig
             BugSplat.init(this,
                           BuildConfig.BUGSPLAT_DATABASE,
                           BuildConfig.BUGSPLAT_APP_NAME,
                           BuildConfig.BUGSPLAT_APP_VERSION);
 
-            // Update UI
-            String statusText = String.format("Status: BugSplat initialized\nDatabase: %s\nApp: %s\nVersion: %s",
-                                             BuildConfig.BUGSPLAT_DATABASE,
-                                             BuildConfig.BUGSPLAT_APP_NAME,
-                                             BuildConfig.BUGSPLAT_APP_VERSION);
-            statusTextView.setText(statusText);
-            Toast.makeText(this, "BugSplat initialized successfully", Toast.LENGTH_SHORT).show();
+            setConnected(true);
             Log.d(TAG, "BugSplat initialized successfully");
         } catch (UnsatisfiedLinkError e) {
             Log.e(TAG, "Native method not found", e);
+            setConnected(false);
             statusTextView.setText("Status: Initialization failed - Native method not found");
             Toast.makeText(this, "Failed to initialize BugSplat: Native method not found", Toast.LENGTH_LONG).show();
-            e.printStackTrace();
         } catch (Exception e) {
             Log.e(TAG, "Failed to initialize BugSplat", e);
+            setConnected(false);
             statusTextView.setText("Status: Initialization failed - " + e.getMessage());
             Toast.makeText(this, "Failed to initialize BugSplat: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            e.printStackTrace();
         }
     }
 }

@@ -67,6 +67,8 @@ android {
         buildConfigField "String", "BUGSPLAT_DATABASE", "\"${project.ext.bugsplatDatabase}\""
         buildConfigField "String", "BUGSPLAT_APP_NAME", "\"${project.ext.bugsplatAppName}\""
         buildConfigField "String", "BUGSPLAT_APP_VERSION", "\"${project.ext.bugsplatAppVersion}\""
+        // Keep in sync with the library's mavenPublishing.coordinates version in app/build.gradle.
+        buildConfigField "String", "BUGSPLAT_SDK_VERSION", "\"1.3.0\""
     }
 
     buildTypes {
