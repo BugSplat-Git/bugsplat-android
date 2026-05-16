@@ -8,7 +8,6 @@
     <string name="demo_section_recent">RECENT ACTIVITY</string>
     <string name="demo_view_dashboard">View dashboard ↗</string>
     <string name="demo_footer">Shake the device to send feedback anytime.</string>
-    <string name="demo_badge_demo">DEMO</string>
     <string name="demo_status_connected">Connected</string>
     <string name="demo_status_disconnected">Offline</string>
     <string name="demo_sdk_version_format">v%1$s</string>

@@ -293,11 +293,10 @@ buildTypes.each { buildType ->
 }
 
 // Run the symbol upload task after the assemble tasks
-// Temporarily disabled — re-enable by uncommenting this block.
-// tasks.whenTaskAdded { task ->
-//     if (task.name == 'assembleDebug') {
-//         task.finalizedBy(tasks.named("uploadBugSplatSymbolsDebugAllAbis"))
-//     } else if (task.name == 'assembleRelease') {
-//         task.finalizedBy(tasks.named("uploadBugSplatSymbolsReleaseAllAbis"))
-//     }
-// }
+tasks.whenTaskAdded { task ->
+    if (task.name == 'assembleDebug') {
+        task.finalizedBy(tasks.named("uploadBugSplatSymbolsDebugAllAbis"))
+    } else if (task.name == 'assembleRelease') {
+        task.finalizedBy(tasks.named("uploadBugSplatSymbolsReleaseAllAbis"))
+    }
+}

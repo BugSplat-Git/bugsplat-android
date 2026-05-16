@@ -21,7 +21,7 @@ public final class ActivityLog {
     private static final String TAG = "ActivityLog";
     private static final String PREFS = "bugsplat_example_activity";
     private static final String KEY_ENTRIES = "entries";
-    private static final int MAX_ENTRIES = 10;
+    private static final int MAX_ENTRIES = 3;
 
     private ActivityLog() {}
 

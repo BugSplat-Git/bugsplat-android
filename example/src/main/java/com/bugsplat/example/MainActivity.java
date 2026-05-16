@@ -1,5 +1,8 @@
 package com.bugsplat.example;
 
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -50,6 +53,7 @@ public class MainActivity extends AppCompatActivity {
         recentActivityEmpty = findViewById(R.id.recentActivityEmpty);
 
         sdkVersionTextView.setText(getString(R.string.demo_sdk_version_format, BuildConfig.BUGSPLAT_SDK_VERSION));
+        ((TextView) findViewById(R.id.databaseBadgeTextView)).setText(BuildConfig.BUGSPLAT_DATABASE);
 
         bindCard(R.id.crashCard, R.drawable.splat_crash,
                 R.string.card_crash_title, R.string.card_crash_subtitle, v -> triggerCrash());
@@ -60,8 +64,7 @@ public class MainActivity extends AppCompatActivity {
         bindCard(R.id.hangCard, R.drawable.splat_hang,
                 R.string.card_hang_title, R.string.card_hang_subtitle, v -> triggerHang());
 
-        findViewById(R.id.viewDashboardTextView).setOnClickListener(v ->
-                Toast.makeText(this, "Open BugSplat dashboard", Toast.LENGTH_SHORT).show());
+        findViewById(R.id.viewDashboardTextView).setOnClickListener(v -> openDashboard());
 
         logNativeLibraryInfo();
         initializeBugSplat();
@@ -270,6 +273,19 @@ public class MainActivity extends AppCompatActivity {
             Log.d(TAG, "Library " + libraryName + " exists: " + library.getAbsolutePath() + " (" + library.length() + " bytes)");
         } else {
             Log.d(TAG, "Library " + libraryName + " does not exist in " + directory.getAbsolutePath());
+        }
+    }
+
+    private void openDashboard() {
+        Uri uri = Uri.parse("https://app.bugsplat.com/v2/dashboard")
+                .buildUpon()
+                .appendQueryParameter("database", BuildConfig.BUGSPLAT_DATABASE)
+                .build();
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, uri));
+        } catch (ActivityNotFoundException e) {
+            Log.w(TAG, "No browser available to open " + uri, e);
+            Toast.makeText(this, "No browser found", Toast.LENGTH_SHORT).show();
         }
     }
 
