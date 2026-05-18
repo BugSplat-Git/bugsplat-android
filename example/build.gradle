@@ -17,6 +17,17 @@ if (localPropsFile.exists()) {
 def bugsplatDb = localProps.getProperty('bugsplat.database') ?:
                  project.findProperty('bugsplat.database') ?:
                  System.getenv('BUGSPLAT_DATABASE')
+
+// Derive the SDK version from app/build.gradle's mavenPublishing.coordinates(...)
+// so the demo's displayed version cannot drift from the published artifact.
+def bugsplatSdkVersion = {
+    def libGradle = rootProject.file('app/build.gradle').text
+    def matcher = libGradle =~ /coordinates\(\s*"com\.bugsplat"\s*,\s*"bugsplat-android"\s*,\s*"([^"]+)"\s*\)/
+    if (!matcher.find()) {
+        throw new GradleException("Could not parse bugsplat-android version from app/build.gradle")
+    }
+    return matcher.group(1)
+}()
 if (!bugsplatDb) {
     throw new GradleException(
         "bugsplat.database is not configured. Set it in one of:\n" +
@@ -67,6 +78,8 @@ android {
         buildConfigField "String", "BUGSPLAT_DATABASE", "\"${project.ext.bugsplatDatabase}\""
         buildConfigField "String", "BUGSPLAT_APP_NAME", "\"${project.ext.bugsplatAppName}\""
         buildConfigField "String", "BUGSPLAT_APP_VERSION", "\"${project.ext.bugsplatAppVersion}\""
+        // Parsed from app/build.gradle's mavenPublishing.coordinates(...) above.
+        buildConfigField "String", "BUGSPLAT_SDK_VERSION", "\"${bugsplatSdkVersion}\""
     }
 
     buildTypes {
@@ -297,4 +310,4 @@ tasks.whenTaskAdded { task ->
     } else if (task.name == 'assembleRelease') {
         task.finalizedBy(tasks.named("uploadBugSplatSymbolsReleaseAllAbis"))
     }
-} 
+}

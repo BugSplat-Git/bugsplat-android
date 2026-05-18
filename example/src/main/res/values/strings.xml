@@ -1,7 +1,38 @@
 <resources>
     <string name="app_name">BugSplat Example</string>
-    <string name="crash_button">Crash App</string>
-    <string name="anr_button">Trigger ANR</string>
-    <string name="feedback_button">Send Feedback</string>
-    <string name="set_attribute_button">Set Attribute</string>
-</resources> 
+
+    <!-- Demo screen copy -->
+    <string name="demo_title">BugSplat SDK · Demo</string>
+    <string name="demo_subtitle">Trigger an event. We catch it, group it, route it to your dashboard.</string>
+    <string name="demo_section_trigger">TRIGGER AN EVENT</string>
+    <string name="demo_section_recent">RECENT ACTIVITY</string>
+    <string name="demo_view_dashboard">View dashboard ↗</string>
+    <string name="demo_footer">Shake the device to send feedback anytime.</string>
+    <string name="demo_status_connected">Connected</string>
+    <string name="demo_status_disconnected">Offline</string>
+    <string name="demo_sdk_version_format">v%1$s</string>
+
+    <!-- Card titles + subtitles -->
+    <string name="card_crash_title">Crash</string>
+    <string name="card_crash_subtitle">Native crash · stack + threads + memory</string>
+    <string name="card_error_title">Non-Crash Error</string>
+    <string name="card_error_subtitle">Exception caught · app keeps running</string>
+    <string name="card_feedback_title">User Feedback</string>
+    <string name="card_feedback_subtitle">Open the feedback sheet</string>
+    <string name="card_hang_title">Hang</string>
+    <string name="card_hang_subtitle">Freeze main thread for 8 seconds</string>
+
+    <!-- Recent activity -->
+    <string name="activity_empty">No events yet — tap a card above to get started.</string>
+    <string name="activity_crash_label">Crash</string>
+    <string name="activity_error_label">Error</string>
+    <string name="activity_feedback_label">Feedback</string>
+    <string name="activity_hang_label">Hang</string>
+    <string name="activity_crash_detail">Native crash triggered</string>
+    <string name="activity_hang_detail">Main thread frozen</string>
+    <string name="activity_feedback_detail_format">"%1$s"</string>
+    <string name="activity_time_just_now">just now</string>
+    <string name="activity_time_minutes_ago">%1$dm ago</string>
+    <string name="activity_time_hours_ago">%1$dh ago</string>
+    <string name="activity_time_days_ago">%1$dd ago</string>
+</resources>
