@@ -38,8 +38,11 @@ public class MainActivity extends AppCompatActivity {
     private TextView statusTextView;
     private TextView sdkVersionTextView;
     private TextView connectedTextView;
+    private View connectedDot;
     private LinearLayout recentActivityContainer;
     private TextView recentActivityEmpty;
+    private ShakeDetector shakeDetector;
+    private AlertDialog feedbackDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,6 +52,7 @@ public class MainActivity extends AppCompatActivity {
         statusTextView = findViewById(R.id.statusTextView);
         sdkVersionTextView = findViewById(R.id.sdkVersionTextView);
         connectedTextView = findViewById(R.id.connectedTextView);
+        connectedDot = findViewById(R.id.connectedDot);
         recentActivityContainer = findViewById(R.id.recentActivityContainer);
         recentActivityEmpty = findViewById(R.id.recentActivityEmpty);
 
@@ -66,8 +70,17 @@ public class MainActivity extends AppCompatActivity {
 
         findViewById(R.id.viewDashboardTextView).setOnClickListener(v -> openDashboard());
 
+        shakeDetector = new ShakeDetector(this, this::onShake);
+
         logNativeLibraryInfo();
         initializeBugSplat();
+    }
+
+    private void onShake() {
+        if (feedbackDialog != null && feedbackDialog.isShowing()) {
+            return;
+        }
+        showFeedbackDialog();
     }
 
     private void bindCard(int cardId, @DrawableRes int iconRes,
@@ -82,24 +95,41 @@ public class MainActivity extends AppCompatActivity {
 
     private void setConnected(boolean connected) {
         connectedTextView.setText(connected ? R.string.demo_status_connected : R.string.demo_status_disconnected);
+        connectedDot.setBackgroundResource(connected ? R.drawable.dot_connected : R.drawable.dot_disconnected);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         renderRecentActivity();
+        if (shakeDetector != null) {
+            shakeDetector.start();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        if (shakeDetector != null) {
+            shakeDetector.stop();
+        }
+        super.onPause();
     }
 
     private void triggerCrash() {
         try {
             Log.d(TAG, "Triggering crash...");
+            // Record BEFORE the crash so the entry survives via SharedPreferences.commit().
+            // If the call returns or throws (didn't actually crash), the catch blocks
+            // roll the entry back so the Activity log doesn't show a phantom crash.
             ActivityLog.record(this, ActivityLog.TYPE_CRASH, getString(R.string.activity_crash_detail));
             BugSplat.crash();
         } catch (UnsatisfiedLinkError e) {
+            ActivityLog.removeMostRecent(this);
             Log.e(TAG, "Native method not found", e);
             statusTextView.setText("Error: Native method not found - " + e.getMessage());
             Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
         } catch (Exception e) {
+            ActivityLog.removeMostRecent(this);
             Log.e(TAG, "Error triggering crash", e);
             statusTextView.setText("Error: " + e.getMessage());
             Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
@@ -129,39 +159,13 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void showSetAttributeDialog() {
-        View dialogView = getLayoutInflater().inflate(R.layout.dialog_attribute, null);
-        EditText keyInput = dialogView.findViewById(R.id.attributeKey);
-        EditText valueInput = dialogView.findViewById(R.id.attributeValue);
-
-        new AlertDialog.Builder(this)
-            .setTitle("Set Attribute")
-            .setView(dialogView)
-            .setPositiveButton("Set", (dialog, which) -> {
-                String key = keyInput.getText().toString().trim();
-                String value = valueInput.getText().toString().trim();
-
-                if (key.isEmpty()) {
-                    Toast.makeText(this, "Key is required", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-
-                BugSplat.setAttribute(key, value);
-                statusTextView.setText("Attribute set: " + key + " = " + value);
-                Toast.makeText(this, "Attribute set!", Toast.LENGTH_SHORT).show();
-                Log.d(TAG, "setAttribute: " + key + " = " + value);
-            })
-            .setNegativeButton("Cancel", null)
-            .show();
-    }
-
     private void showFeedbackDialog() {
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_feedback, null);
         EditText titleInput = dialogView.findViewById(R.id.feedbackTitle);
         EditText descriptionInput = dialogView.findViewById(R.id.feedbackDescription);
         CheckBox includeLogsCheckbox = dialogView.findViewById(R.id.feedbackIncludeLogs);
 
-        new AlertDialog.Builder(this)
+        feedbackDialog = new AlertDialog.Builder(this)
             .setTitle("Send Feedback")
             .setView(dialogView)
             .setPositiveButton("Submit", (dialog, which) -> {
@@ -202,10 +206,9 @@ public class MainActivity extends AppCompatActivity {
                         if (success) {
                             statusTextView.setText("Feedback sent — thank you!");
                             Toast.makeText(this, "Feedback sent!", Toast.LENGTH_SHORT).show();
-                            String detail = title.isEmpty()
-                                    ? getString(R.string.activity_feedback_detail_blank)
-                                    : getString(R.string.activity_feedback_detail_format, title);
-                            ActivityLog.record(this, ActivityLog.TYPE_FEEDBACK, detail);
+                            // Empty titles are rejected above, so title is always non-empty here.
+                            ActivityLog.record(this, ActivityLog.TYPE_FEEDBACK,
+                                    getString(R.string.activity_feedback_detail_format, title));
                             renderRecentActivity();
                         } else {
                             statusTextView.setText("Failed to send feedback");

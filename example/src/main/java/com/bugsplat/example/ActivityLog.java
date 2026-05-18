@@ -86,6 +86,29 @@ public final class ActivityLog {
         prefs(context).edit().remove(KEY_ENTRIES).commit();
     }
 
+    // Roll back a pre-emptive record() when the operation it represented
+    // turned out not to happen (e.g. crash() threw instead of crashing).
+    public static void removeMostRecent(Context context) {
+        List<Entry> entries = getAll(context);
+        if (entries.isEmpty()) {
+            return;
+        }
+        entries.remove(0);
+        JSONArray array = new JSONArray();
+        for (Entry entry : entries) {
+            try {
+                JSONObject obj = new JSONObject();
+                obj.put("type", entry.type);
+                obj.put("detail", entry.detail == null ? "" : entry.detail);
+                obj.put("ts", entry.timestampMs);
+                array.put(obj);
+            } catch (JSONException e) {
+                Log.w(TAG, "Failed to serialize entry", e);
+            }
+        }
+        prefs(context).edit().putString(KEY_ENTRIES, array.toString()).commit();
+    }
+
     private static SharedPreferences prefs(Context context) {
         return context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }

@@ -29,18 +29,10 @@
     <string name="activity_feedback_label">Feedback</string>
     <string name="activity_hang_label">Hang</string>
     <string name="activity_crash_detail">Native crash triggered</string>
-    <string name="activity_error_detail">NullPointerException caught</string>
     <string name="activity_hang_detail">Main thread frozen</string>
     <string name="activity_feedback_detail_format">"%1$s"</string>
-    <string name="activity_feedback_detail_blank">Feedback submitted</string>
     <string name="activity_time_just_now">just now</string>
     <string name="activity_time_minutes_ago">%1$dm ago</string>
     <string name="activity_time_hours_ago">%1$dh ago</string>
     <string name="activity_time_days_ago">%1$dd ago</string>
-
-    <!-- Legacy (unused by new layout but kept for any references) -->
-    <string name="crash_button">Crash App</string>
-    <string name="anr_button">Trigger ANR</string>
-    <string name="feedback_button">Send Feedback</string>
-    <string name="set_attribute_button">Set Attribute</string>
 </resources>
