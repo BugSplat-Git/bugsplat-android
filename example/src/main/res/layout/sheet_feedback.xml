@@ -453,11 +453,13 @@
             android:text="@string/feedback_close" />
 
         <TextView
+            android:id="@+id/feedbackPoweredBy"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:text="@string/feedback_powered_by"
             android:textColor="@color/demo_text_tertiary"
+            android:textColorLink="@color/demo_link"
             android:textSize="12sp" />
     </LinearLayout>
 </FrameLayout>

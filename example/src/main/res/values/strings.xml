@@ -71,6 +71,6 @@
     <string name="feedback_copy">Copy</string>
     <string name="feedback_copied">Report ID copied</string>
     <string name="feedback_view_dashboard">View on dashboard ↗</string>
-    <string name="feedback_powered_by">Powered by BugSplat</string>
+    <string name="feedback_powered_by">Powered by <a href="https://bugsplat.com">BugSplat</a></string>
     <string name="feedback_no_browser">No browser found</string>
 </resources>

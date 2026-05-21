@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.method.LinkMovementMethod;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -125,6 +126,10 @@ public class FeedbackSheetFragment extends BottomSheetDialogFragment {
         view.findViewById(R.id.thanksCopy).setOnClickListener(v -> copyReportId());
         view.findViewById(R.id.thanksViewDashboard).setOnClickListener(v -> openDashboard());
         view.findViewById(R.id.thanksClose).setOnClickListener(v -> dismiss());
+
+        // Make the "BugSplat" anchor in "Powered by BugSplat" tappable.
+        ((TextView) view.findViewById(R.id.feedbackPoweredBy))
+                .setMovementMethod(LinkMovementMethod.getInstance());
 
         // Clear the required-Title error as soon as the user starts typing.
         titleInput.setOnFocusChangeListener((v, hasFocus) -> {
