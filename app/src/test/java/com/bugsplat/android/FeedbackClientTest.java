@@ -188,6 +188,46 @@ public class FeedbackClientTest {
     }
 
     @Test
+    public void postFeedbackWithResult_returnsCrashIdAndInfoUrl() throws Exception {
+        String presignedUrl = server.url("/s3-upload").toString();
+        server.enqueue(new MockResponse().setResponseCode(200)
+                .setBody("{\"url\": \"" + presignedUrl + "\"}"));
+        server.enqueue(new MockResponse().setResponseCode(200));
+        server.enqueue(new MockResponse().setResponseCode(200)
+                .setBody("{\"status\":\"success\",\"crashId\":7733,"
+                        + "\"infoUrl\":\"https://app.bugsplat.com/browse/crashInfo.php?id=7733\"}"));
+
+        FeedbackClient client = createClient();
+        FeedbackResult result = client.postFeedbackWithResult(
+                "Bug Report", "desc", null, null, null, null, null);
+
+        assertTrue(result.isSuccess());
+        assertEquals(Integer.valueOf(7733), result.getCrashId());
+        assertEquals("https://app.bugsplat.com/browse/crashInfo.php?id=7733", result.getInfoUrl());
+    }
+
+    @Test
+    public void postFeedbackWithResult_failureReturnsFailureResult() throws Exception {
+        server.enqueue(new MockResponse().setResponseCode(500));
+
+        FeedbackClient client = createClient();
+        FeedbackResult result = client.postFeedbackWithResult(
+                "Test", null, null, null, null, null, null);
+
+        assertFalse(result.isSuccess());
+        assertNull(result.getCrashId());
+        assertNull(result.getInfoUrl());
+    }
+
+    @Test
+    public void postFeedback_booleanDelegatesToResult() throws Exception {
+        enqueueSuccessfulUpload();
+
+        FeedbackClient client = createClient();
+        assertTrue(client.postFeedback("Test", null, null, null, null));
+    }
+
+    @Test
     public void postFeedback_withAttachments_uploadsAttachmentAsZipEntry() throws Exception {
         enqueueSuccessfulUpload();
 

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Selected segment is white; unselected segments are transparent over the track. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/demo_card_bg" android:state_checked="true" />
+    <item android:color="@android:color/transparent" />
+</selector>

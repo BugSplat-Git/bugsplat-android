@@ -35,4 +35,42 @@
     <string name="activity_time_minutes_ago">%1$dm ago</string>
     <string name="activity_time_hours_ago">%1$dh ago</string>
     <string name="activity_time_days_ago">%1$dd ago</string>
+
+    <!-- Feedback sheet — form -->
+    <string name="feedback_sheet_title">Send feedback</string>
+    <string name="feedback_close">Close</string>
+    <string name="feedback_category_bug">Bug</string>
+    <string name="feedback_category_feature">Feature</string>
+    <string name="feedback_category_other">Other</string>
+    <string name="feedback_label_title">Title</string>
+    <string name="feedback_label_description">Description</string>
+    <string name="feedback_label_name">Name</string>
+    <string name="feedback_label_email">Email</string>
+    <string name="feedback_label_attachment">Attachment</string>
+    <string name="feedback_optional">optional</string>
+    <string name="feedback_hint_title">What went wrong?</string>
+    <string name="feedback_hint_description">Steps to reproduce, expected vs. actual…</string>
+    <string name="feedback_hint_name">Your name</string>
+    <string name="feedback_hint_email">you@example.com</string>
+    <string name="feedback_title_required">Title is required</string>
+    <string name="feedback_add_attachment">Add a file</string>
+    <string name="feedback_loading">Adding…</string>
+    <string name="feedback_replace">Replace</string>
+    <string name="feedback_remove">Remove</string>
+    <string name="feedback_include_logs">Include app logs</string>
+    <string name="feedback_shake_hint">Triggered by shaking the device.</string>
+    <string name="feedback_submit">Send feedback</string>
+    <string name="feedback_submitting">Sending…</string>
+    <string name="feedback_error">Couldn\'t send feedback. Check your connection and try again.</string>
+
+    <!-- Feedback sheet — thank you -->
+    <string name="feedback_thanks_title">Feedback sent. Thanks!</string>
+    <string name="feedback_thanks_message">Your note made it to the BugSplat team. We reply within a day.</string>
+    <string name="feedback_report_id_label">REPORT ID</string>
+    <string name="feedback_report_id_unavailable">—</string>
+    <string name="feedback_copy">Copy</string>
+    <string name="feedback_copied">Report ID copied</string>
+    <string name="feedback_view_dashboard">View on dashboard ↗</string>
+    <string name="feedback_powered_by">Powered by BugSplat</string>
+    <string name="feedback_no_browser">No browser found</string>
 </resources>

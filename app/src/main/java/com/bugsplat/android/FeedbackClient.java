@@ -53,6 +53,19 @@ class FeedbackClient {
 
     boolean postFeedback(String title, String description, String user, String email, String appKey,
                          List<File> attachments, Map<String, String> attributes) {
+        return postFeedbackWithResult(title, description, user, email, appKey, attachments, attributes)
+                .isSuccess();
+    }
+
+    /**
+     * Post feedback and return a {@link FeedbackResult} carrying the report
+     * identifiers from the commit response. Equivalent to
+     * {@link #postFeedback(String, String, String, String, String, List, Map)}
+     * but surfaces {@code crashId}/{@code infoUrl} instead of a bare boolean.
+     */
+    FeedbackResult postFeedbackWithResult(String title, String description, String user, String email,
+                                          String appKey, List<File> attachments,
+                                          Map<String, String> attributes) {
         try {
             // feedback.json — per the User Feedback API, only title (required)
             // and description (optional) live in the JSON; the rest are
@@ -75,17 +88,18 @@ class FeedbackClient {
                     .appKey(appKey)
                     .attributes(attributes);
 
-            boolean success = uploader.upload(zipped, options);
-            if (success) {
+            UploadResult result = uploader.uploadWithResult(zipped, options);
+            if (result.success) {
                 Log.i(TAG, "Feedback posted successfully");
+                return FeedbackResult.success(result.crashId, result.infoUrl);
             } else {
                 Log.e(TAG, "Failed to post feedback");
+                return FeedbackResult.failure();
             }
-            return success;
 
         } catch (JSONException | IOException e) {
             Log.e(TAG, "Failed to post feedback", e);
-            return false;
+            return FeedbackResult.failure();
         }
     }
 
