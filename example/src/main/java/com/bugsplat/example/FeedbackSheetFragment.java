@@ -278,8 +278,8 @@ public class FeedbackSheetFragment extends BottomSheetDialogFragment {
 
     private void openDashboard() {
         Uri uri = DashboardUrls.forReport(
-                result != null ? result.getInfoUrl() : null,
-                BuildConfig.BUGSPLAT_DATABASE);
+                BuildConfig.BUGSPLAT_DATABASE,
+                result != null ? result.getCrashId() : null);
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, uri));
         } catch (ActivityNotFoundException e) {

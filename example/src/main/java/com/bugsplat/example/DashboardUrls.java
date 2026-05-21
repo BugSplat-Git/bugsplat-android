@@ -18,13 +18,23 @@ final class DashboardUrls {
     }
 
     /**
-     * A link to a specific report. Prefers the {@code infoUrl} returned by the
-     * SDK; falls back to the database dashboard when it is unavailable.
+     * A direct link to a specific report by id, e.g.
+     * {@code .../v2/crash?database=demo&id=7733}.
+     *
+     * <p>This is preferred over the SDK's {@code infoUrl} for feedback: feedback
+     * reports group by their (unique) title, so {@code infoUrl} resolves to a
+     * generic page rather than the individual report.</p>
+     *
+     * <p>Falls back to the database dashboard when the id is unavailable.</p>
      */
-    static Uri forReport(String infoUrl, String database) {
-        if (infoUrl != null && !infoUrl.isEmpty()) {
-            return Uri.parse(infoUrl);
+    static Uri forReport(String database, Integer crashId) {
+        if (crashId == null) {
+            return forDatabase(database);
         }
-        return forDatabase(database);
+        return Uri.parse("https://app.bugsplat.com/v2/crash")
+                .buildUpon()
+                .appendQueryParameter("database", database)
+                .appendQueryParameter("id", String.valueOf(crashId))
+                .build();
     }
 }
