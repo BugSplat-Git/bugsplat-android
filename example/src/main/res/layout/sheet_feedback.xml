@@ -113,7 +113,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                app:boxStrokeColor="@color/demo_field_stroke"
+                app:boxStrokeColor="@color/field_box_stroke"
                 app:hintEnabled="false">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -152,7 +152,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                app:boxStrokeColor="@color/demo_field_stroke"
+                app:boxStrokeColor="@color/field_box_stroke"
                 app:hintEnabled="false">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -192,7 +192,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                app:boxStrokeColor="@color/demo_field_stroke"
+                app:boxStrokeColor="@color/field_box_stroke"
                 app:hintEnabled="false">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -232,7 +232,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                app:boxStrokeColor="@color/demo_field_stroke"
+                app:boxStrokeColor="@color/field_box_stroke"
                 app:hintEnabled="false">
 
                 <com.google.android.material.textfield.TextInputEditText
