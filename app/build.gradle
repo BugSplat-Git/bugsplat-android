@@ -123,37 +123,6 @@ dependencies {
     androidTestImplementation libs.androidx.espresso.core
 }
 
-// Create assets directory if it doesn't exist
-task createAssetsDirectory {
-    doLast {
-        def assetsDir = file('src/main/assets')
-        if (!assetsDir.exists()) {
-            assetsDir.mkdirs()
-        }
-    }
-}
-
-// Copy symbol-upload binary to assets directory
-// This assumes the symbol-upload binary is in the project root directory
-// Adjust the path as needed
-task copySymbolUploadBinary(dependsOn: createAssetsDirectory) {
-    doLast {
-        def symbolUploadBinary = file('../symbol-upload')
-        if (symbolUploadBinary.exists()) {
-            copy {
-                from symbolUploadBinary
-                into 'src/main/assets'
-            }
-        } else {
-            logger.warn("symbol-upload binary not found at ${symbolUploadBinary.absolutePath}")
-            logger.warn("Please place the symbol-upload binary in the project root directory or adjust the path in build.gradle")
-        }
-    }
-}
-
-// Run the copy task before the preBuild task
-preBuild.dependsOn copySymbolUploadBinary
-
 afterEvaluate {
     android.libraryVariants.all { variant ->
         def bundleTask = tasks.named("bundle${variant.name.capitalize()}Aar")
