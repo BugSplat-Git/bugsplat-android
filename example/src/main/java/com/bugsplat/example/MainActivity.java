@@ -8,8 +8,6 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.CheckBox;
-import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -17,23 +15,18 @@ import android.widget.Toast;
 
 import androidx.annotation.DrawableRes;
 import androidx.annotation.StringRes;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.bugsplat.android.BugSplat;
 
 import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity
+        implements FeedbackSheetFragment.FeedbackListener {
 
     private static final String TAG = "BugSplatExample";
+    private static final String FEEDBACK_TAG = "feedback";
 
     private TextView statusTextView;
     private TextView sdkVersionTextView;
@@ -42,7 +35,6 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout recentActivityContainer;
     private TextView recentActivityEmpty;
     private ShakeDetector shakeDetector;
-    private AlertDialog feedbackDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,9 +69,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onShake() {
-        if (feedbackDialog != null && feedbackDialog.isShowing()) {
-            return;
-        }
         showFeedbackDialog();
     }
 
@@ -160,86 +149,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showFeedbackDialog() {
-        View dialogView = getLayoutInflater().inflate(R.layout.dialog_feedback, null);
-        EditText titleInput = dialogView.findViewById(R.id.feedbackTitle);
-        EditText descriptionInput = dialogView.findViewById(R.id.feedbackDescription);
-        CheckBox includeLogsCheckbox = dialogView.findViewById(R.id.feedbackIncludeLogs);
-
-        feedbackDialog = new AlertDialog.Builder(this)
-            .setTitle("Send Feedback")
-            .setView(dialogView)
-            .setPositiveButton("Submit", (dialog, which) -> {
-                String title = titleInput.getText().toString().trim();
-                String description = descriptionInput.getText().toString().trim();
-                boolean includeLogs = includeLogsCheckbox.isChecked();
-
-                if (title.isEmpty()) {
-                    Toast.makeText(this, "Subject is required", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-
-                statusTextView.setText("Sending feedback...");
-
-                new Thread(() -> {
-                    List<File> attachments = null;
-                    if (includeLogs) {
-                        File logFile = createSampleLogFile();
-                        if (logFile != null) {
-                            attachments = new ArrayList<>();
-                            attachments.add(logFile);
-                        }
-                    }
-
-                    boolean success = BugSplat.postFeedbackBlocking(
-                        BuildConfig.BUGSPLAT_DATABASE,
-                        BuildConfig.BUGSPLAT_APP_NAME,
-                        BuildConfig.BUGSPLAT_APP_VERSION,
-                        title,
-                        description,
-                        null,
-                        null,
-                        null,
-                        attachments
-                    );
-
-                    runOnUiThread(() -> {
-                        if (success) {
-                            statusTextView.setText("Feedback sent — thank you!");
-                            Toast.makeText(this, "Feedback sent!", Toast.LENGTH_SHORT).show();
-                            // Empty titles are rejected above, so title is always non-empty here.
-                            ActivityLog.record(this, ActivityLog.TYPE_FEEDBACK,
-                                    getString(R.string.activity_feedback_detail_format, title));
-                            renderRecentActivity();
-                        } else {
-                            statusTextView.setText("Failed to send feedback");
-                            Toast.makeText(this, "Failed to send feedback", Toast.LENGTH_SHORT).show();
-                        }
-                    });
-                }).start();
-            })
-            .setNegativeButton("Cancel", null)
-            .show();
+        // Guard against a second sheet (e.g. shaking while one is already open).
+        if (getSupportFragmentManager().findFragmentByTag(FEEDBACK_TAG) != null) {
+            return;
+        }
+        FeedbackSheetFragment.newInstance().show(getSupportFragmentManager(), FEEDBACK_TAG);
     }
 
-    private File createSampleLogFile() {
-        try {
-            File logFile = new File(getCacheDir(), "sample_logs.txt");
-            String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date());
-            try (FileWriter writer = new FileWriter(logFile)) {
-                writer.write("=== BugSplat Sample Log File ===\n");
-                writer.write("Generated: " + timestamp + "\n\n");
-                writer.write("[INFO]  " + timestamp + " Application started\n");
-                writer.write("[DEBUG] " + timestamp + " BugSplat SDK initialized\n");
-                writer.write("[INFO]  " + timestamp + " User navigated to main screen\n");
-                writer.write("[WARN]  " + timestamp + " Network latency detected (250ms)\n");
-                writer.write("[DEBUG] " + timestamp + " Cache cleared successfully\n");
-                writer.write("[INFO]  " + timestamp + " User submitted feedback\n");
-            }
-            return logFile;
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to create sample log file", e);
-            return null;
-        }
+    /** Callback from {@link FeedbackSheetFragment} once feedback uploads successfully. */
+    @Override
+    public void onFeedbackSent(String title) {
+        ActivityLog.record(this, ActivityLog.TYPE_FEEDBACK,
+                getString(R.string.activity_feedback_detail_format, title));
+        renderRecentActivity();
     }
 
     private void logNativeLibraryInfo() {
@@ -280,10 +202,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openDashboard() {
-        Uri uri = Uri.parse("https://app.bugsplat.com/v2/dashboard")
-                .buildUpon()
-                .appendQueryParameter("database", BuildConfig.BUGSPLAT_DATABASE)
-                .build();
+        Uri uri = DashboardUrls.forDatabase(BuildConfig.BUGSPLAT_DATABASE);
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, uri));
         } catch (ActivityNotFoundException e) {

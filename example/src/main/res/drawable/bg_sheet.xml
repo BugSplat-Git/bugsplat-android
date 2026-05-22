@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bottom-sheet background: white with rounded top corners. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/demo_card_bg" />
+    <corners
+        android:topLeftRadius="20dp"
+        android:topRightRadius="20dp" />
+</shape>

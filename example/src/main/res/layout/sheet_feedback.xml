@@ -1,0 +1,465 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Bottom-sheet feedback UI. Holds two states in one layout, toggled by
+  FeedbackSheetFragment: the input form (feedbackFormGroup) and the
+  confirmation screen (feedbackThanksGroup).
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_sheet">
+
+    <!-- ============================ FORM ============================ -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/feedbackFormGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <!-- Header -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/feedback_sheet_title"
+                    style="@style/DemoText.SheetTitle" />
+
+                <ImageButton
+                    android:id="@+id/feedbackClose"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_close"
+                    android:scaleType="centerInside"
+                    android:contentDescription="@string/feedback_close" />
+            </LinearLayout>
+
+            <!-- Category segmented control -->
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/categoryToggleGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:padding="4dp"
+                android:background="@drawable/bg_segment_track"
+                app:singleSelection="true"
+                app:selectionRequired="true"
+                app:checkedButton="@id/catBug">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/catBug"
+                    style="@style/Widget.Demo.SegmentedButton"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="40dp"
+                    android:text="@string/feedback_category_bug" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/catFeature"
+                    style="@style/Widget.Demo.SegmentedButton"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="40dp"
+                    android:text="@string/feedback_category_feature" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/catOther"
+                    style="@style/Widget.Demo.SegmentedButton"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="40dp"
+                    android:text="@string/feedback_category_other" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <!-- Title (required) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/feedback_label_title"
+                    style="@style/DemoText.FieldLabel" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="3dp"
+                    android:text="*"
+                    android:textColor="@color/demo_required"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/feedbackTitleLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                app:boxStrokeColor="@color/field_box_stroke"
+                app:hintEnabled="false">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/feedbackTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/feedback_hint_title"
+                    android:inputType="textCapSentences"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Description (optional) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/feedback_label_description"
+                    style="@style/DemoText.FieldLabel" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/feedback_optional"
+                    android:textColor="@color/demo_text_tertiary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                app:boxStrokeColor="@color/field_box_stroke"
+                app:hintEnabled="false">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/feedbackDescription"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/feedback_hint_description"
+                    android:inputType="textMultiLine|textCapSentences"
+                    android:minLines="3"
+                    android:gravity="top" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Name (optional) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/feedback_label_name"
+                    style="@style/DemoText.FieldLabel" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/feedback_optional"
+                    android:textColor="@color/demo_text_tertiary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                app:boxStrokeColor="@color/field_box_stroke"
+                app:hintEnabled="false">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/feedbackName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/feedback_hint_name"
+                    android:inputType="textPersonName"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Email (optional) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/feedback_label_email"
+                    style="@style/DemoText.FieldLabel" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/feedback_optional"
+                    android:textColor="@color/demo_text_tertiary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/feedbackEmailLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                app:boxStrokeColor="@color/field_box_stroke"
+                app:hintEnabled="false">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/feedbackEmail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/feedback_hint_email"
+                    android:inputType="textEmailAddress"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Attachment (optional) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/feedback_label_attachment"
+                    style="@style/DemoText.FieldLabel" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/feedback_optional"
+                    android:textColor="@color/demo_text_tertiary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <!-- Attachment row: file icon, name + size, Replace/Add action -->
+            <LinearLayout
+                android:id="@+id/attachmentRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_card"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="12dp">
+
+                <ImageView
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="8dp"
+                    android:background="@drawable/bg_segment_track"
+                    android:src="@drawable/ic_attachment"
+                    android:contentDescription="@string/feedback_label_attachment" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="12dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/attachmentName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/feedback_add_attachment"
+                        android:textColor="@color/demo_text_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:maxLines="1"
+                        android:ellipsize="middle" />
+
+                    <TextView
+                        android:id="@+id/attachmentMeta"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/demo_text_tertiary"
+                        android:textSize="12sp"
+                        android:maxLines="1"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/attachmentAction"
+                    style="@style/Widget.Demo.Button.Text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="0dp"
+                    android:text="@string/feedback_replace" />
+            </LinearLayout>
+
+            <!-- Include logs -->
+            <CheckBox
+                android:id="@+id/feedbackIncludeLogs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:buttonTint="@color/brand_green"
+                android:text="@string/feedback_include_logs"
+                android:textColor="@color/demo_text_secondary"
+                android:checked="true" />
+
+            <!-- Footer -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:gravity="center"
+                android:text="@string/feedback_shake_hint"
+                style="@style/DemoText.MetaSmall"
+                android:textColor="@color/demo_text_tertiary" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/feedbackSubmit"
+                style="@style/Widget.Demo.Button.Primary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/feedback_submit"
+                app:icon="@drawable/ic_arrow_forward" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- ========================== THANK YOU ========================== -->
+    <LinearLayout
+        android:id="@+id/feedbackThanksGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <FrameLayout
+            android:layout_width="76dp"
+            android:layout_height="76dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_success_circle">
+
+            <ImageView
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_check"
+                android:contentDescription="@string/feedback_thanks_title" />
+        </FrameLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="@string/feedback_thanks_title"
+            style="@style/DemoText.SheetTitle" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="@string/feedback_thanks_message"
+            style="@style/DemoText.Subtitle" />
+
+        <!-- Report ID row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:background="@drawable/bg_card"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="14dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/feedback_report_id_label"
+                style="@style/DemoText.SectionHeader" />
+
+            <TextView
+                android:id="@+id/thanksReportId"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:textColor="@color/demo_text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:fontFamily="monospace"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/thanksCopy"
+                style="@style/Widget.Demo.Button.Text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:text="@string/feedback_copy"
+                app:icon="@drawable/ic_copy"
+                app:iconGravity="textStart"
+                app:iconSize="16dp"
+                app:iconTint="@color/demo_link" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/thanksViewDashboard"
+            style="@style/Widget.Demo.Button.Primary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/feedback_view_dashboard" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/thanksClose"
+            style="@style/Widget.Demo.Button.Text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@color/demo_text_secondary"
+            android:text="@string/feedback_close" />
+
+        <TextView
+            android:id="@+id/feedbackPoweredBy"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/feedback_powered_by"
+            android:textColor="@color/demo_text_tertiary"
+            android:textColorLink="@color/demo_link"
+            android:textSize="12sp" />
+    </LinearLayout>
+</FrameLayout>

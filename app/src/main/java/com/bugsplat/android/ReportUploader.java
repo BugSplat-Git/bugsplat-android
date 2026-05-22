@@ -59,6 +59,20 @@ class ReportUploader {
      * @return true if all three steps succeeded
      */
     boolean upload(byte[] zipped, CommitOptions options) throws IOException {
+        return uploadWithResult(zipped, options).success;
+    }
+
+    /**
+     * Upload a pre-built zip using the 3-part S3 upload flow, returning the
+     * report identifiers parsed from the commit response.
+     *
+     * @param zipped The zipped payload bytes to upload
+     * @param options Commit-request fields (crashType, user, email, attributes, etc.)
+     * @return an {@link UploadResult} — {@code success} is true if all three
+     *         steps succeeded; {@code crashId}/{@code infoUrl} may still be null
+     *         on success if the server omits them or the response is unparseable
+     */
+    UploadResult uploadWithResult(byte[] zipped, CommitOptions options) throws IOException {
         if (zipped == null || zipped.length == 0) {
             throw new IllegalArgumentException("zipped payload must not be empty");
         }
@@ -68,24 +82,25 @@ class ReportUploader {
         String presignedUrl = getCrashUploadUrl(zipped.length);
         if (presignedUrl == null) {
             Log.e(TAG, "Failed to get crash upload URL");
-            return false;
+            return UploadResult.failure();
         }
 
         // Step 2: PUT the zip to S3
         if (!uploadToPresignedUrl(presignedUrl, zipped)) {
             Log.e(TAG, "Failed to upload to presigned URL");
-            return false;
+            return UploadResult.failure();
         }
         Log.d(TAG, "Uploaded " + zipped.length + " bytes to S3");
 
         // Step 3: Commit
-        if (!commitUpload(presignedUrl, md5, options)) {
+        UploadResult result = commitUpload(presignedUrl, md5, options);
+        if (!result.success) {
             Log.e(TAG, "Failed to commit upload");
-            return false;
+            return UploadResult.failure();
         }
         Log.i(TAG, "Upload committed"
                 + (options != null && options.crashType != null ? " (" + options.crashType + ")" : ""));
-        return true;
+        return result;
     }
 
     private String getCrashUploadUrl(int size) throws IOException {
@@ -154,7 +169,7 @@ class ReportUploader {
      * mirror the documented BugSplat API 1-to-1:
      * https://docs.bugsplat.com/introduction/development/web-services/crash#request-body-multipart-form-data
      */
-    private boolean commitUpload(String s3Key, String md5, CommitOptions options) throws IOException {
+    private UploadResult commitUpload(String s3Key, String md5, CommitOptions options) throws IOException {
         String urlStr = getBaseUrl() + "/api/commitS3CrashUpload";
         String boundary = java.util.UUID.randomUUID().toString();
 
@@ -206,14 +221,43 @@ class ReportUploader {
 
             int status = conn.getResponseCode();
             if (status >= 200 && status < 300) {
-                return true;
+                return parseCommitResponse(readBody(conn.getInputStream()));
             } else {
                 String body = readBody(status >= 400 ? conn.getErrorStream() : conn.getInputStream());
                 Log.e(TAG, "commitS3CrashUpload failed (HTTP " + status + "): " + body);
-                return false;
+                return UploadResult.failure();
             }
         } finally {
             conn.disconnect();
+        }
+    }
+
+    /**
+     * Parse the {@code commitS3CrashUpload} success response body into an
+     * {@link UploadResult}. The documented body is JSON of the form
+     * {@code {"status":"success","crashId":1,"infoUrl":"https://..."}}.
+     *
+     * <p>Parsing is tolerant: if the body is missing or not JSON, the upload
+     * itself still succeeded, so a success result is returned with null
+     * identifiers rather than reporting a failure.</p>
+     */
+    private static UploadResult parseCommitResponse(String body) {
+        if (body == null || body.isEmpty()) {
+            return UploadResult.success(null, null);
+        }
+        try {
+            JSONObject json = new JSONObject(body);
+            int id = json.optInt("crashId", -1);
+            Integer crashId = id >= 0 ? id : null;
+            String infoUrl = json.optString("infoUrl", null);
+            if (infoUrl != null && infoUrl.isEmpty()) {
+                infoUrl = null;
+            }
+            return UploadResult.success(crashId, infoUrl);
+        } catch (org.json.JSONException e) {
+            Log.w(TAG, "commitS3CrashUpload response was not JSON; "
+                    + "upload succeeded but report id is unavailable");
+            return UploadResult.success(null, null);
         }
     }
 

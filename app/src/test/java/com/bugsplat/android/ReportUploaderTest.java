@@ -259,6 +259,78 @@ public class ReportUploaderTest {
         }
     }
 
+    // ---- uploadWithResult / commit-response parsing tests ----
+
+    /** Enqueue the 3-step flow with a custom commit (step 3) response body. */
+    private void enqueueFlowWithCommitBody(String commitBody) {
+        String presignedUrl = server.url("/s3-upload").toString();
+        server.enqueue(new MockResponse().setResponseCode(200)
+                .setBody("{\"url\": \"" + presignedUrl + "\"}"));
+        server.enqueue(new MockResponse().setResponseCode(200));
+        server.enqueue(new MockResponse().setResponseCode(200).setBody(commitBody));
+    }
+
+    @Test
+    public void uploadWithResult_parsesCrashIdAndInfoUrl() throws Exception {
+        enqueueFlowWithCommitBody("{\"status\":\"success\",\"crashId\":7733,\"stackKeyId\":5555,"
+                + "\"messageId\":12345,\"infoUrl\":\"https://app.bugsplat.com/browse/crashInfo.php?id=7733\"}");
+
+        ReportUploader uploader = new TestableReportUploader("testdb", "testapp", "1.0.0", server);
+        UploadResult result = uploader.uploadWithResult(sampleZip(), anrOptions());
+
+        assertTrue("upload should succeed", result.success);
+        assertEquals(Integer.valueOf(7733), result.crashId);
+        assertEquals("https://app.bugsplat.com/browse/crashInfo.php?id=7733", result.infoUrl);
+    }
+
+    @Test
+    public void uploadWithResult_succeedsWithNullsWhenCommitBodyNotJson() throws Exception {
+        enqueueFlowWithCommitBody("OK");
+
+        ReportUploader uploader = new TestableReportUploader("testdb", "testapp", "1.0.0", server);
+        UploadResult result = uploader.uploadWithResult(sampleZip(), anrOptions());
+
+        assertTrue("upload still succeeds when body is not JSON", result.success);
+        assertNull(result.crashId);
+        assertNull(result.infoUrl);
+    }
+
+    @Test
+    public void uploadWithResult_succeedsWithNullsWhenCommitBodyEmpty() throws Exception {
+        enqueueFlowWithCommitBody("");
+
+        ReportUploader uploader = new TestableReportUploader("testdb", "testapp", "1.0.0", server);
+        UploadResult result = uploader.uploadWithResult(sampleZip(), anrOptions());
+
+        assertTrue(result.success);
+        assertNull(result.crashId);
+        assertNull(result.infoUrl);
+    }
+
+    @Test
+    public void uploadWithResult_returnsFailureOnCommit4xx() throws Exception {
+        String presignedUrl = server.url("/s3-upload").toString();
+        server.enqueue(new MockResponse().setResponseCode(200)
+                .setBody("{\"url\": \"" + presignedUrl + "\"}"));
+        server.enqueue(new MockResponse().setResponseCode(200));
+        server.enqueue(new MockResponse().setResponseCode(400));
+
+        ReportUploader uploader = new TestableReportUploader("testdb", "testapp", "1.0.0", server);
+        UploadResult result = uploader.uploadWithResult(sampleZip(), anrOptions());
+
+        assertFalse(result.success);
+        assertNull(result.crashId);
+        assertNull(result.infoUrl);
+    }
+
+    @Test
+    public void upload_booleanOverloadStillReturnsTrueOnSuccess() throws Exception {
+        enqueueFlowWithCommitBody("{\"status\":\"success\",\"crashId\":1}");
+        ReportUploader uploader = new TestableReportUploader("testdb", "testapp", "1.0.0", server);
+        assertTrue("boolean upload() delegates to uploadWithResult()",
+                uploader.upload(sampleZip(), anrOptions()));
+    }
+
     /**
      * Test subclass that routes all HTTP calls to the MockWebServer.
      */

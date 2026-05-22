@@ -302,7 +302,78 @@ public class BugSplat {
                                                String title, String description, String user, String email,
                                                String appKey, List<File> attachments,
                                                Map<String, String> attributes) {
+        return postFeedbackBlockingWithResult(database, application, version, title, description,
+                user, email, appKey, attachments, attributes).isSuccess();
+    }
+
+    /**
+     * Post user feedback to BugSplat, returning the report identifiers.
+     * This blocks until the upload is complete.
+     *
+     * @param database The BugSplat database name
+     * @param application The application name
+     * @param version The application version
+     * @param title The feedback title (becomes the stack key for grouping)
+     * @param description Additional feedback context
+     * @param user The user's name or id
+     * @param email The user's email
+     * @param appKey The application key for authentication
+     * @return a {@link FeedbackResult} with the success flag and (when available)
+     *         the report's {@code crashId} and {@code infoUrl}
+     */
+    public static FeedbackResult postFeedbackBlockingWithResult(String database, String application, String version,
+                                                                String title, String description, String user, String email,
+                                                                String appKey) {
+        return postFeedbackBlockingWithResult(database, application, version, title, description,
+                user, email, appKey, null);
+    }
+
+    /**
+     * Post user feedback to BugSplat with file attachments, returning the report identifiers.
+     * This blocks until the upload is complete.
+     *
+     * @param database The BugSplat database name
+     * @param application The application name
+     * @param version The application version
+     * @param title The feedback title (becomes the stack key for grouping)
+     * @param description Additional feedback context
+     * @param user The user's name or id
+     * @param email The user's email
+     * @param appKey The application key for authentication
+     * @param attachments List of files to attach to the feedback report, or null for none
+     * @return a {@link FeedbackResult} with the success flag and (when available)
+     *         the report's {@code crashId} and {@code infoUrl}
+     */
+    public static FeedbackResult postFeedbackBlockingWithResult(String database, String application, String version,
+                                                                String title, String description, String user, String email,
+                                                                String appKey, List<File> attachments) {
+        return postFeedbackBlockingWithResult(database, application, version, title, description,
+                user, email, appKey, attachments, null);
+    }
+
+    /**
+     * Post user feedback to BugSplat with file attachments and custom attributes,
+     * returning the report identifiers. This blocks until the upload is complete.
+     *
+     * @param database The BugSplat database name
+     * @param application The application name
+     * @param version The application version
+     * @param title The feedback title (becomes the stack key for grouping)
+     * @param description Additional feedback context
+     * @param user The user's name or id
+     * @param email The user's email
+     * @param appKey The application key for authentication
+     * @param attachments List of files to attach to the feedback report, or null for none
+     * @param attributes Custom key/value attributes to associate with the feedback, or null for none
+     * @return a {@link FeedbackResult} with the success flag and (when available)
+     *         the report's {@code crashId} and {@code infoUrl}. The identifiers may
+     *         be null even on success if the server omits them.
+     */
+    public static FeedbackResult postFeedbackBlockingWithResult(String database, String application, String version,
+                                                                String title, String description, String user, String email,
+                                                                String appKey, List<File> attachments,
+                                                                Map<String, String> attributes) {
         FeedbackClient client = new FeedbackClient(database, application, version);
-        return client.postFeedback(title, description, user, email, appKey, attachments, attributes);
+        return client.postFeedbackWithResult(title, description, user, email, appKey, attachments, attributes);
     }
 } 
