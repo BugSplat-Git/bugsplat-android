@@ -8,6 +8,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.text.method.LinkMovementMethod;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -64,6 +66,7 @@ public class FeedbackSheetFragment extends BottomSheetDialogFragment {
     private TextInputEditText emailInput;
     private CheckBox includeLogsCheckbox;
     private MaterialButton submitButton;
+    private View attachmentRow;
     private TextView attachmentName;
     private TextView attachmentMeta;
     private MaterialButton attachmentAction;
@@ -113,13 +116,14 @@ public class FeedbackSheetFragment extends BottomSheetDialogFragment {
         emailInput = view.findViewById(R.id.feedbackEmail);
         includeLogsCheckbox = view.findViewById(R.id.feedbackIncludeLogs);
         submitButton = view.findViewById(R.id.feedbackSubmit);
+        attachmentRow = view.findViewById(R.id.attachmentRow);
         attachmentName = view.findViewById(R.id.attachmentName);
         attachmentMeta = view.findViewById(R.id.attachmentMeta);
         attachmentAction = view.findViewById(R.id.attachmentAction);
         reportIdView = view.findViewById(R.id.thanksReportId);
 
         view.findViewById(R.id.feedbackClose).setOnClickListener(v -> dismiss());
-        view.findViewById(R.id.attachmentRow).setOnClickListener(v -> launchPicker());
+        attachmentRow.setOnClickListener(v -> launchPicker());
         attachmentAction.setOnClickListener(v -> launchPicker());
         submitButton.setOnClickListener(v -> submitFeedback());
 
@@ -132,10 +136,19 @@ public class FeedbackSheetFragment extends BottomSheetDialogFragment {
                 .setMovementMethod(LinkMovementMethod.getInstance());
 
         // Clear the required-Title error as soon as the user starts typing.
-        titleInput.setOnFocusChangeListener((v, hasFocus) -> {
-            if (hasFocus) {
-                titleLayout.setError(null);
+        titleInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (titleLayout.getError() != null) {
+                    titleLayout.setError(null);
+                }
             }
+
+            @Override
+            public void afterTextChanged(Editable s) { }
         });
 
         renderAttachment();
@@ -312,6 +325,8 @@ public class FeedbackSheetFragment extends BottomSheetDialogFragment {
         nameInput.setEnabled(enabled);
         emailInput.setEnabled(enabled);
         includeLogsCheckbox.setEnabled(enabled);
+        attachmentRow.setEnabled(enabled);
+        attachmentRow.setClickable(enabled);
         attachmentAction.setEnabled(enabled);
         for (int i = 0; i < categoryGroup.getChildCount(); i++) {
             categoryGroup.getChildAt(i).setEnabled(enabled);
