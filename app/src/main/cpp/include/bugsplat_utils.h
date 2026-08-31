@@ -21,8 +21,8 @@ void createAttributes(JNIEnv *env, jobject attributes_map);
 
 /**
  * Creates a vector of file paths from a Java String array.
- * Paths are not required to exist at call time; Crashpad resolves them
- * when a crash is uploaded.
+ * Paths are not required to exist at call time; Crashpad copies them
+ * when the crash is captured.
  *
  * @param env JNI environment
  * @param attachments Java String array containing file paths

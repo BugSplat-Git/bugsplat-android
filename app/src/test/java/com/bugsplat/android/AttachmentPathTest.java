@@ -29,6 +29,12 @@ public class AttachmentPathTest {
         assertIllegalPath("/tmp/foo\rbar", "Attachment path must not contain newline characters");
     }
 
+    @Test
+    public void validate_rejectsRelativePath() {
+        assertIllegalPath("log.txt", "Attachment path must be absolute");
+        assertIllegalPath("files/log.txt", "Attachment path must be absolute");
+    }
+
     private static void assertIllegalPath(String path, String message) {
         try {
             AttachmentPath.validate(path);

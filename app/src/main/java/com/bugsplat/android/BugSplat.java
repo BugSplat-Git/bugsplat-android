@@ -112,12 +112,13 @@ public class BugSplat {
     /**
      * Attach a file to subsequent native crash reports.
      * This can be called at any time after {@link #init}, including with a path
-     * that does not exist yet — the file is read when a crash is uploaded.
+     * that does not exist yet — the file is copied when the crash is captured.
+     * Missing files are skipped.
      *
      * <p>Adding a path that is already attached is a no-op.</p>
      *
      * @param path Absolute path of the file to attach (must not be null or blank)
-     * @throws IllegalArgumentException if path is null, blank, or contains a newline
+     * @throws IllegalArgumentException if path is null, blank, relative, or contains a newline
      */
     public static void addAttachment(String path) {
         BugSplatBridge.addAttachment(path);
@@ -128,7 +129,7 @@ public class BugSplat {
      * Removing a path that is not attached is a no-op.
      *
      * @param path Absolute path of the file to detach (must not be null or blank)
-     * @throws IllegalArgumentException if path is null, blank, or contains a newline
+     * @throws IllegalArgumentException if path is null, blank, relative, or contains a newline
      */
     public static void removeAttachment(String path) {
         BugSplatBridge.removeAttachment(path);

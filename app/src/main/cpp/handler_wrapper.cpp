@@ -1,5 +1,4 @@
 #include <android/log.h>
-#include <dirent.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
@@ -31,25 +30,50 @@ static const char* findDatabaseArg(int argc, char** argv) {
     return nullptr;
 }
 
-static int realHandlerPath(char* out, size_t outSize) {
-    char self[PATH_MAX];
-    ssize_t n = readlink("/proc/self/exe", self, sizeof(self) - 1);
-    if (n < 0) {
-        return -1;
+static bool handlerFromExePath(const char* exe, char* out, size_t outSize) {
+    if (exe == nullptr || exe[0] == '\0') {
+        return false;
     }
-    self[n] = '\0';
 
-    char* slash = strrchr(self, '/');
+    char buf[PATH_MAX];
+    if (strlen(exe) >= sizeof(buf)) {
+        return false;
+    }
+    memcpy(buf, exe, strlen(exe) + 1);
+
+    // readlink("/proc/self/exe") can append " (deleted)" after an in-place update.
+    char* deleted = strstr(buf, " (deleted)");
+    if (deleted != nullptr) {
+        *deleted = '\0';
+    }
+
+    char* slash = strrchr(buf, '/');
     if (slash == nullptr) {
-        return -1;
+        return false;
     }
     *slash = '\0';
 
-    int written = snprintf(out, outSize, "%s/libcrashpad_handler.so", self);
+    int written = snprintf(out, outSize, "%s/libcrashpad_handler.so", buf);
     if (written < 0 || static_cast<size_t>(written) >= outSize) {
-        return -1;
+        return false;
     }
-    return 0;
+    return access(out, F_OK) == 0;
+}
+
+static int realHandlerPath(int argc, char** argv, char* out, size_t outSize) {
+    if (argc > 0 && handlerFromExePath(argv[0], out, outSize)) {
+        return 0;
+    }
+
+    char self[PATH_MAX];
+    ssize_t n = readlink("/proc/self/exe", self, sizeof(self) - 1);
+    if (n > 0) {
+        self[n] = '\0';
+        if (handlerFromExePath(self, out, outSize)) {
+            return 0;
+        }
+    }
+    return -1;
 }
 
 static void trimTrailing(char* line) {
@@ -61,7 +85,9 @@ static void trimTrailing(char* line) {
 
 int main(int argc, char** argv) {
     char handler[PATH_MAX];
-    if (realHandlerPath(handler, sizeof(handler)) != 0) {
+    if (realHandlerPath(argc, argv, handler, sizeof(handler)) != 0) {
+        // argv[0] is this wrapper; re-execing it would loop. A dump still
+        // requires locating libcrashpad_handler.so next to us.
         __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,
                             "could not resolve libcrashpad_handler.so");
         return 1;
