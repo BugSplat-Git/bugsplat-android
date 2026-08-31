@@ -108,6 +108,31 @@ public class BugSplat {
     public static void removeAttribute(String key) {
         BugSplatBridge.removeAttribute(key);
     }
+
+    /**
+     * Attach a file to subsequent native crash reports.
+     * This can be called at any time after {@link #init}, including with a path
+     * that does not exist yet — the file is read when a crash is uploaded.
+     *
+     * <p>Adding a path that is already attached is a no-op.</p>
+     *
+     * @param path Absolute path of the file to attach (must not be null or blank)
+     * @throws IllegalArgumentException if path is null, blank, or contains a newline
+     */
+    public static void addAttachment(String path) {
+        BugSplatBridge.addAttachment(path);
+    }
+
+    /**
+     * Stop attaching a file to subsequent native crash reports.
+     * Removing a path that is not attached is a no-op.
+     *
+     * @param path Absolute path of the file to detach (must not be null or blank)
+     * @throws IllegalArgumentException if path is null, blank, or contains a newline
+     */
+    public static void removeAttachment(String path) {
+        BugSplatBridge.removeAttachment(path);
+    }
     
     /**
      * Upload debug symbols for native libraries (.so files) in the specified directory.

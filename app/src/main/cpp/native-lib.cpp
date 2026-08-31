@@ -1,14 +1,18 @@
 #include <android/log.h>
+#include <cstdio>
 #include <jni.h>
 #include <map>
+#include <pthread.h>
 #include <string>
 #include <unistd.h>
+#include <vector>
 #include "client/annotation.h"
 #include "client/annotation_list.h"
 #include "client/crashpad_client.h"
 #include "client/crashpad_info.h"
 #include "client/crash_report_database.h"
 #include "client/settings.h"
+#include "include/bugsplat_attachments.h"
 #include "include/bugsplat_utils.h"
 
 using namespace base;
@@ -42,6 +46,14 @@ struct DynamicAnnotation {
 
 static map<string, DynamicAnnotation*>* g_annotations = nullptr;
 
+static pthread_mutex_t g_attachments_mutex = PTHREAD_MUTEX_INITIALIZER;
+static vector<string>* g_attachments = nullptr;
+static string g_attachments_list_path;
+
+static bool persistAttachmentsLocked();
+static bool addAttachmentPath(const char* path);
+static void removeAttachmentPath(const char* path);
+
 // Forward declarations of JNI functions
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass clazz,
@@ -67,6 +79,14 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_bugsplat_android_BugSplatBridge_jniRemoveAttribute(JNIEnv *env, jclass clazz,
                                                             jstring key);
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_bugsplat_android_BugSplatBridge_jniAddAttachment(JNIEnv *env, jclass clazz,
+                                                         jstring path);
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_bugsplat_android_BugSplatBridge_jniRemoveAttachment(JNIEnv *env, jclass clazz,
+                                                            jstring path);
+
 // JNI implementation
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass clazz,
@@ -81,8 +101,12 @@ Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass cla
     string dataDir = env->GetStringUTFChars(data_dir, nullptr);
     string libDir = env->GetStringUTFChars(lib_dir, nullptr);
 
-    // Crashpad file paths
-    FilePath handler(libDir + "/libcrashpad_handler.so");
+    // Crashpad file paths. Prefer the wrapper so post-init add/remove of
+    // attachments is reflected at crash time; fall back to the stock handler.
+    FilePath crashpadHandler(libDir + "/libcrashpad_handler.so");
+    FilePath wrapperHandler(libDir + "/libbugsplat_handler.so");
+    bool useWrapper = access(wrapperHandler.value().c_str(), F_OK) == 0;
+    FilePath handler = useWrapper ? wrapperHandler : crashpadHandler;
     FilePath reportsDir(dataDir + "/crashpad");
     FilePath metricsDir(dataDir + "/crashpad");
 
@@ -129,8 +153,29 @@ Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass cla
         return false;
     settings->SetUploadsEnabled(true);
 
-    // Create attachments
-    vector<FilePath> attachmentPaths = createAttachments(env, attachments);
+    // Attachment paths are resolved at crash time (files do not need to exist
+    // yet). The wrapper reads this list when it execs crashpad_handler; without
+    // the wrapper, Crashpad snapshots the paths into argv here and they cannot
+    // be updated later.
+    pthread_mutex_lock(&g_attachments_mutex);
+    g_attachments = new vector<string>(createAttachments(env, attachments));
+    g_attachments_list_path = reportsDir.value() + "/" + kAttachmentsListFileName;
+    persistAttachmentsLocked();
+    vector<FilePath> attachmentPaths;
+    if (!useWrapper) {
+        for (const auto& path : *g_attachments) {
+            attachmentPaths.emplace_back(path);
+        }
+    }
+    pthread_mutex_unlock(&g_attachments_mutex);
+
+    if (useWrapper) {
+        __android_log_print(ANDROID_LOG_INFO, "bugsplat-android",
+                            "Using attachment wrapper: %s", handler.value().c_str());
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "bugsplat-android",
+                            "libbugsplat_handler.so missing; post-init attachments will not apply");
+    }
 
     // Start Crashpad crash handler
     static auto *client = new CrashpadClient();
@@ -251,32 +296,150 @@ Java_com_bugsplat_android_BugSplatBridge_jniRemoveAttribute(JNIEnv *env, jclass 
     env->ReleaseStringUTFChars(key, keyStr);
 }
 
-vector<FilePath> createAttachments(JNIEnv *env, jobjectArray attachments) {
-    vector<FilePath> attachmentPaths;
-    
+vector<string> createAttachments(JNIEnv *env, jobjectArray attachments) {
+    vector<string> attachmentPaths;
+
     if (attachments == nullptr) {
         return attachmentPaths;
     }
-    
+
     jsize length = env->GetArrayLength(attachments);
     for (jsize i = 0; i < length; i++) {
         jstring path = (jstring)env->GetObjectArrayElement(attachments, i);
-        const char* pathStr = env->GetStringUTFChars(path, nullptr);
-        
-        // Log the attachment path for debugging
-        __android_log_print(ANDROID_LOG_INFO, "bugsplat-android", "Attachment path: %s", pathStr);
-        
-        // Check if the file exists and is readable
-        if (access(pathStr, R_OK) == 0) {
-            attachmentPaths.push_back(FilePath(pathStr));
-            __android_log_print(ANDROID_LOG_INFO, "bugsplat-android", "Attachment file exists and is readable");
-        } else {
-            __android_log_print(ANDROID_LOG_WARN, "bugsplat-android", "Attachment file does not exist or is not readable: %s", pathStr);
+        if (path == nullptr) {
+            continue;
         }
-        
+        const char* pathStr = env->GetStringUTFChars(path, nullptr);
+
+        if (pathStr != nullptr && pathStr[0] != '\0') {
+            __android_log_print(ANDROID_LOG_INFO, "bugsplat-android",
+                                "Attachment path: %s", pathStr);
+            attachmentPaths.emplace_back(pathStr);
+        }
+
         env->ReleaseStringUTFChars(path, pathStr);
         env->DeleteLocalRef(path);
     }
-    
+
     return attachmentPaths;
+}
+
+static bool persistAttachmentsLocked() {
+    if (g_attachments == nullptr || g_attachments_list_path.empty()) {
+        return false;
+    }
+
+    string tmpPath = g_attachments_list_path + ".tmp";
+    FILE* file = fopen(tmpPath.c_str(), "w");
+    if (file == nullptr) {
+        __android_log_print(ANDROID_LOG_ERROR, "bugsplat-android",
+                            "Failed to write attachments list: %s", tmpPath.c_str());
+        return false;
+    }
+
+    for (const auto& path : *g_attachments) {
+        fprintf(file, "%s\n", path.c_str());
+    }
+
+    int flushResult = fflush(file);
+    int syncResult = fsync(fileno(file));
+    fclose(file);
+    if (flushResult != 0 || syncResult != 0) {
+        unlink(tmpPath.c_str());
+        __android_log_print(ANDROID_LOG_ERROR, "bugsplat-android",
+                            "Failed to flush attachments list");
+        return false;
+    }
+
+    if (rename(tmpPath.c_str(), g_attachments_list_path.c_str()) != 0) {
+        unlink(tmpPath.c_str());
+        __android_log_print(ANDROID_LOG_ERROR, "bugsplat-android",
+                            "Failed to replace attachments list");
+        return false;
+    }
+    return true;
+}
+
+static bool addAttachmentPath(const char* path) {
+    pthread_mutex_lock(&g_attachments_mutex);
+    if (g_attachments == nullptr) {
+        pthread_mutex_unlock(&g_attachments_mutex);
+        return false;
+    }
+
+    for (const auto& existing : *g_attachments) {
+        if (existing == path) {
+            pthread_mutex_unlock(&g_attachments_mutex);
+            return true;
+        }
+    }
+
+    g_attachments->emplace_back(path);
+    persistAttachmentsLocked();
+    pthread_mutex_unlock(&g_attachments_mutex);
+    return true;
+}
+
+static void removeAttachmentPath(const char* path) {
+    pthread_mutex_lock(&g_attachments_mutex);
+    if (g_attachments == nullptr) {
+        pthread_mutex_unlock(&g_attachments_mutex);
+        return;
+    }
+
+    auto it = g_attachments->begin();
+    while (it != g_attachments->end()) {
+        if (*it == path) {
+            it = g_attachments->erase(it);
+        } else {
+            ++it;
+        }
+    }
+    persistAttachmentsLocked();
+    pthread_mutex_unlock(&g_attachments_mutex);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_bugsplat_android_BugSplatBridge_jniAddAttachment(JNIEnv *env, jclass clazz,
+                                                         jstring path) {
+    if (path == nullptr) {
+        return;
+    }
+    const char* pathStr = env->GetStringUTFChars(path, nullptr);
+    if (pathStr == nullptr) {
+        return;
+    }
+
+    if (!addAttachmentPath(pathStr)) {
+        __android_log_print(ANDROID_LOG_WARN, "bugsplat-android",
+                            "addAttachment called before init");
+    } else {
+        __android_log_print(ANDROID_LOG_INFO, "bugsplat-android",
+                            "Added attachment: %s", pathStr);
+    }
+
+    env->ReleaseStringUTFChars(path, pathStr);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_bugsplat_android_BugSplatBridge_jniRemoveAttachment(JNIEnv *env, jclass clazz,
+                                                            jstring path) {
+    if (path == nullptr) {
+        return;
+    }
+    const char* pathStr = env->GetStringUTFChars(path, nullptr);
+    if (pathStr == nullptr) {
+        return;
+    }
+
+    if (g_attachments == nullptr) {
+        __android_log_print(ANDROID_LOG_WARN, "bugsplat-android",
+                            "removeAttachment called before init");
+    } else {
+        removeAttachmentPath(pathStr);
+        __android_log_print(ANDROID_LOG_INFO, "bugsplat-android",
+                            "Removed attachment: %s", pathStr);
+    }
+
+    env->ReleaseStringUTFChars(path, pathStr);
 }

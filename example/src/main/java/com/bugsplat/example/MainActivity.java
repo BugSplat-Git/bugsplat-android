@@ -20,6 +20,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.bugsplat.android.BugSplat;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity
@@ -285,6 +287,14 @@ public class MainActivity extends AppCompatActivity
                           BuildConfig.BUGSPLAT_DATABASE,
                           BuildConfig.BUGSPLAT_APP_NAME,
                           BuildConfig.BUGSPLAT_APP_VERSION);
+
+            File logFile = new File(getFilesDir(), "app.log");
+            try (FileWriter writer = new FileWriter(logFile, true)) {
+                writer.write("BugSplat example started\n");
+            } catch (IOException e) {
+                Log.w(TAG, "Could not write example log file", e);
+            }
+            BugSplat.addAttachment(logFile.getAbsolutePath());
 
             setConnected(true);
             Log.d(TAG, "BugSplat initialized successfully");

@@ -67,6 +67,16 @@ public class BugSplatBridge {
         jniRemoveAttribute(key);
     }
 
+    public static void addAttachment(String path) {
+        AttachmentPath.validate(path);
+        jniAddAttachment(path);
+    }
+
+    public static void removeAttachment(String path) {
+        AttachmentPath.validate(path);
+        jniRemoveAttachment(path);
+    }
+
     private static void validateAttributeKey(String key) {
         if (key == null || key.trim().isEmpty()) {
             throw new IllegalArgumentException("Attribute key must not be null or blank");
@@ -83,4 +93,8 @@ public class BugSplatBridge {
     static native void jniSetAttribute(String key, String value);
 
     static native void jniRemoveAttribute(String key);
+
+    static native void jniAddAttachment(String path);
+
+    static native void jniRemoveAttachment(String path);
 }

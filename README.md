@@ -179,6 +179,11 @@ BugSplat.init(
     attributes,
     attachments
 )
+
+// Attachments can also be added or removed after init. Paths are read when a
+// crash is uploaded, so the file does not need to exist yet.
+BugSplat.addAttachment(attachmentPath)
+BugSplat.removeAttachment(attachmentPath)
 ```
 
 **Java**
@@ -198,6 +203,9 @@ BugSplat.init(
     attributes,
     attachments
 );
+
+BugSplat.addAttachment(attachmentPath);
+BugSplat.removeAttachment(attachmentPath);
 ```
 
 ### Symbol Upload
