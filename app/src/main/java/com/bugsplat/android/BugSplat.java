@@ -189,6 +189,29 @@ public class BugSplat {
     }
 
     /**
+     * Re-applies the promoted fields to the native annotation list, which does not exist
+     * until init has run. Called from BugSplatBridge.initBugSplat so a caller that sets
+     * them before init still gets them on native crash reports.
+     */
+    static void applyPromotedAttributes() {
+        if (user != null) {
+            setPromotedAttribute(ATTRIBUTE_USER, user);
+        }
+
+        if (email != null) {
+            setPromotedAttribute(ATTRIBUTE_EMAIL, email);
+        }
+
+        if (notes != null) {
+            setPromotedAttribute(ATTRIBUTE_NOTES, notes);
+        }
+
+        if (key != null) {
+            setPromotedAttribute(ATTRIBUTE_KEY, key);
+        }
+    }
+
+    /**
      * setAttribute treats a null value as a removal, and these four setters document null
      * as "clear", so the two are routed to the same place rather than duplicating the rule.
      */

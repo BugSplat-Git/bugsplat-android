@@ -36,6 +36,11 @@ public class BugSplatBridge {
                 jniInitBugSplat(applicationInfo.dataDir, applicationInfo.nativeLibraryDir, database, application,
                         version, attributes, attachments));
 
+        // The annotation list does not exist until jniInitBugSplat runs, so a
+        // setUser/setEmail/setNotes/setKey call made before init was dropped by
+        // the native layer. Replay whatever was set so ordering does not matter.
+        BugSplat.applyPromotedAttributes();
+
         // Check for ANR reports from previous sessions (Android 11+)
         AnrReporter anrReporter = new AnrReporter(activity, database, application, version);
         anrReporter.checkAndReport();

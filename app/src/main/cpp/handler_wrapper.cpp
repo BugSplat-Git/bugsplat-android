@@ -108,7 +108,10 @@ int main(int argc, char** argv) {
                 while (extraCount < MAX_EXTRA_ATTACHMENTS &&
                        fgets(line, sizeof(line), file) != nullptr) {
                     trimTrailing(line);
-                    if (line[0] == '\0') {
+                    // Only absolute paths are ever written here, so anything else
+                    // means a corrupted or stale file; skip it rather than hand
+                    // crashpad_handler a malformed --attachment argument.
+                    if (line[0] != '/') {
                         continue;
                     }
                     size_t argLen = strlen("--attachment=") + strlen(line) + 1;

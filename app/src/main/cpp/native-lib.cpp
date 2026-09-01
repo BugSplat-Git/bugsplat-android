@@ -161,6 +161,12 @@ Java_com_bugsplat_android_BugSplatBridge_jniInitBugSplat(JNIEnv *env, jclass cla
     g_attachments = new vector<string>(createAttachments(env, attachments));
     g_attachments_list_path = reportsDir.value() + "/" + kAttachmentsListFileName;
     bool persisted = persistAttachmentsLocked();
+    if (!persisted) {
+        // A list file from a previous run would otherwise be read by the wrapper
+        // at crash time and appended to the argv snapshot below, attaching stale
+        // paths this session never registered.
+        unlink(g_attachments_list_path.c_str());
+    }
     vector<FilePath> attachmentPaths;
     // Without the wrapper, Crashpad snapshots these into argv. If persist
     // failed, put them in argv even when using the wrapper so init attachments
