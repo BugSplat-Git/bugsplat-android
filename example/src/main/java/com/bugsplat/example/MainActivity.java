@@ -20,7 +20,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.bugsplat.android.BugSplat;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity
         implements FeedbackSheetFragment.FeedbackListener {
@@ -140,10 +142,17 @@ public class MainActivity extends AppCompatActivity
             value.length();
         } catch (Exception e) {
             Log.e(TAG, "Caught non-crash exception", e);
-            statusTextView.setText("Caught: " + e.getClass().getSimpleName() + " — app still running");
-            Toast.makeText(this, "Exception caught", Toast.LENGTH_SHORT).show();
+
+            // Report the caught exception to BugSplat as a non-fatal. The upload
+            // happens on a background thread, so the app keeps running.
+            Map<String, String> attributes = new HashMap<>();
+            attributes.put("source", "error card");
+            BugSplat.postException(e, attributes);
+
+            statusTextView.setText("Reported: " + e.getClass().getSimpleName() + " — app still running");
+            Toast.makeText(this, "Exception reported to BugSplat", Toast.LENGTH_SHORT).show();
             ActivityLog.record(this, ActivityLog.TYPE_ERROR,
-                    e.getClass().getSimpleName() + " caught");
+                    e.getClass().getSimpleName() + " reported");
             renderRecentActivity();
         }
     }

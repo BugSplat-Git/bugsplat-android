@@ -374,6 +374,77 @@ When integrating BugSplat into your Android application, it's crucial to ensure 
 
 These configurations ensure that the BugSplat native libraries are properly included in your app and can function correctly to capture and report native crashes.
 
+## Handled Exceptions 🪤
+
+Not every problem crashes the process. Use `BugSplat.postException` to report a caught `Throwable` as a non-fatal report. Non-fatals appear alongside crashes with the **"Android.Java"** type, so you can filter them separately on the dashboard.
+
+Reports carry the same metadata as a crash: the attributes and attachments passed to `init`, plus anything set with `BugSplat.setAttribute`. `BugSplat.init` must have been called first — a post before init is logged and dropped.
+
+### Reporting a caught exception
+
+**Java**
+```java
+try {
+    riskyOperation();
+} catch (Exception e) {
+    // Uploads on a background thread and returns immediately
+    BugSplat.postException(e);
+}
+```
+
+**Kotlin**
+```kotlin
+try {
+    riskyOperation()
+} catch (e: Exception) {
+    BugSplat.postException(e)
+}
+```
+
+### Per-report attributes
+
+Attributes passed to `postException` are layered over the attributes already registered with the SDK, so a per-report value wins over one with the same key from `init` or `setAttribute`:
+
+```java
+Map<String, String> attributes = new HashMap<>();
+attributes.put("screen", "checkout");
+attributes.put("retryCount", "2");
+
+BugSplat.postException(e, attributes);
+```
+
+### Blocking submission
+
+Use `postExceptionBlocking` when you need the result — for example in a background worker that should not exit until the report is uploaded. It returns `false` if the upload failed, the post was rate limited, or the SDK was not initialized. **Do not call it on the main thread.**
+
+```java
+boolean reported = BugSplat.postExceptionBlocking(e);
+```
+
+### Rate limiting
+
+A caught exception inside a render or game loop can fire every frame, so the SDK drops posts made within **3000ms** of the previous accepted one. Adjust the window, or disable the guard entirely with a value of zero or less:
+
+```java
+BugSplat.setExceptionPostIntervalMillis(10_000); // at most one report per 10s
+BugSplat.setExceptionPostIntervalMillis(0);      // report every exception
+```
+
+### Reporting uncaught exceptions
+
+Crashpad only catches native signals, so a Java exception that reaches the top of the stack is not reported automatically. To capture those, install a default handler that posts the exception before delegating to the previous one:
+
+```java
+Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
+    // The process is about to die, so block until the report is uploaded
+    BugSplat.postExceptionBlocking(throwable);
+    if (previous != null) {
+        previous.uncaughtException(thread, throwable);
+    }
+});
+```
+
 ## ANR Detection 🐌
 
 The BugSplat Android SDK automatically detects and reports Application Not Responding (ANR) events on Android 11+ (API level 30+) using the [`ApplicationExitInfo`](https://developer.android.com/reference/android/app/ApplicationExitInfo) API.

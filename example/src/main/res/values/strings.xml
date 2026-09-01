@@ -16,7 +16,7 @@
     <string name="card_crash_title">Crash</string>
     <string name="card_crash_subtitle">Native crash · stack + threads + memory</string>
     <string name="card_error_title">Non-Crash Error</string>
-    <string name="card_error_subtitle">Exception caught · app keeps running</string>
+    <string name="card_error_subtitle">Caught exception reported · app keeps running</string>
     <string name="card_feedback_title">User Feedback</string>
     <string name="card_feedback_subtitle">Open the feedback sheet</string>
     <string name="card_hang_title">Hang</string>

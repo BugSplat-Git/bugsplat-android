@@ -2,6 +2,7 @@ package com.bugsplat.android;
 
 import android.app.Activity;
 import android.content.Context;
+import android.util.Log;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
@@ -109,6 +110,96 @@ public class BugSplat {
         BugSplatBridge.removeAttribute(key);
     }
     
+    /**
+     * Report a caught {@link Throwable} to BugSplat as a non-fatal error.
+     * This runs on a background thread and returns immediately.
+     *
+     * <p>The report carries the attributes and attachments supplied to
+     * {@code init}, plus any set with {@link #setAttribute(String, String)}, and
+     * appears on the dashboard with the {@code Android.Java} crash type so
+     * non-fatals can be filtered separately from crashes.</p>
+     *
+     * <p>Posts closer together than the exception post interval are dropped —
+     * see {@link #setExceptionPostIntervalMillis(long)}. Requires {@code init}
+     * to have been called; a post before init is logged and ignored.</p>
+     *
+     * @param throwable The caught exception to report
+     */
+    public static void postException(Throwable throwable) {
+        postException(throwable, null);
+    }
+
+    /**
+     * Report a caught {@link Throwable} to BugSplat with additional attributes.
+     * This runs on a background thread and returns immediately.
+     *
+     * @param throwable The caught exception to report
+     * @param attributes Extra key/value attributes for this report, layered over
+     *                   the attributes already registered with the SDK, or null
+     */
+    public static void postException(Throwable throwable, Map<String, String> attributes) {
+        new Thread(() -> postExceptionInternal(throwable, attributes)).start();
+    }
+
+    /**
+     * Report a caught {@link Throwable} to BugSplat.
+     * This blocks until the upload is complete.
+     *
+     * @param throwable The caught exception to report
+     * @return true if the report was uploaded; false if it failed, was rate
+     *         limited, or the SDK was not initialized
+     */
+    public static boolean postExceptionBlocking(Throwable throwable) {
+        return postExceptionBlocking(throwable, null);
+    }
+
+    /**
+     * Report a caught {@link Throwable} to BugSplat with additional attributes.
+     * This blocks until the upload is complete.
+     *
+     * @param throwable The caught exception to report
+     * @param attributes Extra key/value attributes for this report, layered over
+     *                   the attributes already registered with the SDK, or null
+     * @return true if the report was uploaded; false if it failed, was rate
+     *         limited, or the SDK was not initialized
+     */
+    public static boolean postExceptionBlocking(Throwable throwable, Map<String, String> attributes) {
+        return postExceptionInternal(throwable, attributes);
+    }
+
+    /**
+     * Set the minimum time between two accepted {@code postException} calls.
+     *
+     * <p>A caught exception inside a render or game loop can fire every frame,
+     * so posts made within this window of the previous one are dropped. Defaults
+     * to 3000ms. Pass zero or less to disable the guard and post every
+     * exception.</p>
+     *
+     * @param millis The minimum interval in milliseconds
+     */
+    public static void setExceptionPostIntervalMillis(long millis) {
+        ExceptionReporter.setMinPostIntervalMillis(millis);
+    }
+
+    private static boolean postExceptionInternal(Throwable throwable, Map<String, String> attributes) {
+        if (throwable == null) {
+            Log.e("BugSplat", "postException called with a null throwable");
+            return false;
+        }
+        if (!BugSplatConfig.isInitialized()) {
+            Log.e("BugSplat", "postException called before init; report dropped");
+            return false;
+        }
+        if (!ExceptionReporter.shouldPost(System.currentTimeMillis())) {
+            Log.w("BugSplat", "postException rate limited; report dropped");
+            return false;
+        }
+
+        ExceptionReporter reporter = new ExceptionReporter(
+                BugSplatConfig.database(), BugSplatConfig.application(), BugSplatConfig.version());
+        return reporter.post(throwable, attributes, BugSplatConfig.attachmentFiles());
+    }
+
     /**
      * Upload debug symbols for native libraries (.so files) in the specified directory.
      * This method runs asynchronously and returns immediately.
