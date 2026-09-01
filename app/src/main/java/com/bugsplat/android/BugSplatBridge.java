@@ -31,6 +31,10 @@ public class BugSplatBridge {
 
     public static void initBugSplat(Activity activity, String database, String application, String version,
             Map<String, String> attributes, String[] attachments) {
+        // Mirror the init parameters on the Java side — Crashpad owns this state
+        // natively, and postException needs to read it back to build a report.
+        BugSplatConfig.init(database, application, version, attributes, attachments);
+
         ApplicationInfo applicationInfo = activity.getApplicationInfo();
         Log.d("BugSplat", "init result: " +
                 jniInitBugSplat(applicationInfo.dataDir, applicationInfo.nativeLibraryDir, database, application,
@@ -56,14 +60,16 @@ public class BugSplatBridge {
     public static void setAttribute(String key, String value) {
         validateAttributeKey(key);
         if (value == null) {
-            jniRemoveAttribute(key);
+            removeAttribute(key);
             return;
         }
+        BugSplatConfig.setAttribute(key, value);
         jniSetAttribute(key, value);
     }
 
     public static void removeAttribute(String key) {
         validateAttributeKey(key);
+        BugSplatConfig.removeAttribute(key);
         jniRemoveAttribute(key);
     }
 
