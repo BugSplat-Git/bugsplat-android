@@ -109,6 +109,98 @@ public class BugSplat {
         BugSplatBridge.removeAttribute(key);
     }
 
+    // Reserved attribute names the BugSplat backend promotes to first-class report
+    // fields. Native crash reports reach the backend through Crashpad, which carries
+    // annotations and nothing else, so these four values ride along as attributes.
+    private static final String ATTRIBUTE_USER = "BugSplatUser";
+    private static final String ATTRIBUTE_EMAIL = "BugSplatEmail";
+    private static final String ATTRIBUTE_NOTES = "BugSplatNotes";
+    private static final String ATTRIBUTE_KEY = "BugSplatApplicationKey";
+
+    // Also retained here because reports that do not come from Crashpad - ANRs, which
+    // are committed directly - populate these as typed fields on the commit request.
+    private static volatile String user;
+    private static volatile String email;
+    private static volatile String notes;
+    private static volatile String key;
+
+    /**
+     * Set the user name reported with subsequent crash, ANR, and feedback reports.
+     *
+     * <p>Passing null clears the value.</p>
+     *
+     * @param user The user name, or null to clear
+     */
+    public static void setUser(String user) {
+        BugSplat.user = user;
+        setPromotedAttribute(ATTRIBUTE_USER, user);
+    }
+
+    /**
+     * Set the user email reported with subsequent crash, ANR, and feedback reports.
+     *
+     * <p>Passing null clears the value.</p>
+     *
+     * @param email The user email, or null to clear
+     */
+    public static void setEmail(String email) {
+        BugSplat.email = email;
+        setPromotedAttribute(ATTRIBUTE_EMAIL, email);
+    }
+
+    /**
+     * Set the notes reported with subsequent crash, ANR, and feedback reports.
+     *
+     * <p>Passing null clears the value.</p>
+     *
+     * @param notes The notes, or null to clear
+     */
+    public static void setNotes(String notes) {
+        BugSplat.notes = notes;
+        setPromotedAttribute(ATTRIBUTE_NOTES, notes);
+    }
+
+    /**
+     * Set the application key reported with subsequent crash, ANR, and feedback reports.
+     *
+     * <p>Passing null clears the value.</p>
+     *
+     * @param key The application key, or null to clear
+     */
+    public static void setKey(String key) {
+        BugSplat.key = key;
+        setPromotedAttribute(ATTRIBUTE_KEY, key);
+    }
+
+    static String getUser() {
+        return user;
+    }
+
+    static String getEmail() {
+        return email;
+    }
+
+    static String getNotes() {
+        return notes;
+    }
+
+    static String getKey() {
+        return key;
+    }
+
+    /**
+     * setAttribute treats a null value as a removal, and these four setters document null
+     * as "clear", so the two are routed to the same place rather than duplicating the rule.
+     */
+    private static void setPromotedAttribute(String attribute, String value) {
+        if (value == null) {
+            BugSplatBridge.removeAttribute(attribute);
+            return;
+        }
+
+        BugSplatBridge.setAttribute(attribute, value);
+    }
+
     /**
      * Attach a file to subsequent native crash reports.
      * This can be called at any time after {@link #init}, including with a path
