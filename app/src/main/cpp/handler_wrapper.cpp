@@ -129,6 +129,11 @@ int main(int argc, char** argv) {
     char** newArgv = static_cast<char**>(calloc(static_cast<size_t>(newArgc) + 1,
                                                 sizeof(char*)));
     if (newArgv == nullptr) {
+        // Attachments are lost, but a dump without them beats no dump at all.
+        // argv[0] is this wrapper, so point it at the handler the way the
+        // success path below does - the handler should never see itself named
+        // libbugsplat_handler.so.
+        argv[0] = handler;
         execv(handler, argv);
         __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,
                             "execv(%s) failed: %s", handler, strerror(errno));
