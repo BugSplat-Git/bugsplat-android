@@ -296,6 +296,14 @@ public class MainActivity extends AppCompatActivity
             }
             BugSplat.addAttachment(logFile.getAbsolutePath());
 
+            // Demonstrates the four promoted fields. Set after init so a crash, an ANR, or
+            // feedback triggered from this session all carry them; each shows up as its own
+            // column on the dashboard rather than as a custom attribute.
+            BugSplat.setUser("Fred");
+            BugSplat.setEmail("fred@bugsplat.com");
+            BugSplat.setNotes("Set from the BugSplat example app");
+            BugSplat.setKey("example-" + BuildConfig.BUGSPLAT_APP_VERSION);
+
             setConnected(true);
             Log.d(TAG, "BugSplat initialized successfully");
         } catch (UnsatisfiedLinkError e) {
