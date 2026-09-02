@@ -58,7 +58,7 @@ android {
 
     sourceSets {
         main {
-            jniLibs.srcDirs = ['src/main/cpp/crashpad/lib']
+            jniLibs.srcDirs = ['src/main/cpp/crashpad/lib', new File(buildDir, 'handlerWrapper')]
             // Ensure assets directory exists
             assets.srcDirs = ['src/main/assets']
         }

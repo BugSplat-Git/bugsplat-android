@@ -36,6 +36,11 @@ public class BugSplatBridge {
                 jniInitBugSplat(applicationInfo.dataDir, applicationInfo.nativeLibraryDir, database, application,
                         version, attributes, attachments));
 
+        // The annotation list does not exist until jniInitBugSplat runs, so a
+        // setUser/setEmail/setNotes/setKey call made before init was dropped by
+        // the native layer. Replay whatever was set so ordering does not matter.
+        BugSplat.applyPromotedAttributes();
+
         // Check for ANR reports from previous sessions (Android 11+)
         AnrReporter anrReporter = new AnrReporter(activity, database, application, version);
         anrReporter.checkAndReport();
@@ -67,6 +72,16 @@ public class BugSplatBridge {
         jniRemoveAttribute(key);
     }
 
+    public static void addAttachment(String path) {
+        AttachmentPath.validate(path);
+        jniAddAttachment(path);
+    }
+
+    public static void removeAttachment(String path) {
+        AttachmentPath.validate(path);
+        jniRemoveAttachment(path);
+    }
+
     private static void validateAttributeKey(String key) {
         if (key == null || key.trim().isEmpty()) {
             throw new IllegalArgumentException("Attribute key must not be null or blank");
@@ -83,4 +98,8 @@ public class BugSplatBridge {
     static native void jniSetAttribute(String key, String value);
 
     static native void jniRemoveAttribute(String key);
+
+    static native void jniAddAttachment(String path);
+
+    static native void jniRemoveAttachment(String path);
 }
