@@ -1,0 +1,99 @@
+name: build
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+env:
+  # Must match bugsplat-native/.github/workflows/android.yml
+  CRASHPAD_COMMIT: db44314646cbd0825a73b58dd2b7b5f4faca64a7
+  NDK_VERSION: 28.2.13676358
+  CMAKE_VERSION: 3.30.5
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      # bugsplat-native is a submodule; while it is private the checkout needs a token that can
+      # read it (repository secret BUGSPLAT_NATIVE_TOKEN). Once public, github.token is enough.
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.BUGSPLAT_NATIVE_TOKEN || github.token }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install NDK, CMake and platform
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" "cmake;$CMAKE_VERSION" "platforms;android-35" "build-tools;35.0.0" >/dev/null
+          echo "ANDROID_NDK=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin" >> "$GITHUB_PATH"
+
+      - name: Cache Crashpad Android builds
+        id: crashpad-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/crashpad-work
+          key: crashpad-${{ env.CRASHPAD_COMMIT }}-android-ndk${{ env.NDK_VERSION }}-v1
+
+      - name: Fetch depot_tools and build Crashpad (Android)
+        if: steps.crashpad-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$GITHUB_WORKSPACE/depot_tools"
+          export PATH="$GITHUB_WORKSPACE/depot_tools:$PATH"
+          gclient --version
+          mkdir -p crashpad-work && cd crashpad-work
+          fetch --no-history crashpad
+          cd crashpad
+          git fetch --depth 1 origin "$CRASHPAD_COMMIT" && git checkout "$CRASHPAD_COMMIT"
+          gclient sync
+          for cpu in arm64 x64; do   # 64-bit only; see bugsplat-native/docs/platforms/android.md
+            gn gen "out/android-$cpu-release" --args="target_os=\"android\" target_cpu=\"$cpu\" android_ndk_root=\"$ANDROID_NDK\" android_api_level=26 is_debug=false"
+            ninja -C "out/android-$cpu-release" client client:common handler handler:common snapshot snapshot:context \
+              minidump minidump:format util util:net compat tools:tool_support third_party/mini_chromium/mini_chromium/base:base
+          done
+
+      - name: Build AAR and example APK
+        run: |
+          ./gradlew --no-daemon --stacktrace \
+            -Pbugsplat.crashpadRoot="$GITHUB_WORKSPACE/crashpad-work/crashpad" \
+            :bugsplat:assembleRelease :example:assembleDebug
+
+      - name: 16 KB page-size alignment check
+        run: |
+          bash bugsplat-native/tests/integration/android_check_alignment.sh \
+            bugsplat-native/bindings/kotlin/build/outputs/aar/bugsplat-release.aar \
+            bugsplat-native/samples/android/app/build/outputs/apk/debug/app-debug.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bugsplat-android
+          path: |
+            bugsplat-native/bindings/kotlin/build/outputs/aar/*.aar
+            bugsplat-native/samples/android/app/build/outputs/apk/debug/app-debug.apk
+
+      # ---- release: tag v9.x.y -> GitHub release with the AAR, Maven Central when secrets exist --
+      - name: Publish to Maven Central
+        if: startsWith(github.ref, 'refs/tags/v') && env.OSSRH_USERNAME != ''
+        env:
+          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
+        run: |
+          ./gradlew --no-daemon -Pbugsplat.crashpadRoot="$GITHUB_WORKSPACE/crashpad-work/crashpad" \
+            -Pbugsplat.version="${GITHUB_REF_NAME#v}" :bugsplat:publishReleasePublicationToSonatypeRepository
+
+      - name: GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp bugsplat-native/bindings/kotlin/build/outputs/aar/bugsplat-release.aar "bugsplat-android-${GITHUB_REF_NAME#v}.aar"
+          gh release create "$GITHUB_REF_NAME" "bugsplat-android-${GITHUB_REF_NAME#v}.aar" --title "$GITHUB_REF_NAME" --generate-notes

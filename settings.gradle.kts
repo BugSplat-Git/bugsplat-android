@@ -1,12 +1,8 @@
+// bugsplat-android 9.x: the Kotlin SDK lives in bugsplat-native/bindings/kotlin (git submodule);
+// this repository packages, tests and publishes it, and carries the example app.
 pluginManagement {
     repositories {
-        google {
-            content {
-                includeGroupByRegex("com\\.android.*")
-                includeGroupByRegex("com\\.google.*")
-                includeGroupByRegex("androidx.*")
-            }
-        }
+        google()
         mavenCentral()
         gradlePluginPortal()
     }
@@ -20,6 +16,7 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "bugsplat-android"
-include(":app")
+include(":bugsplat")
+project(":bugsplat").projectDir = file("bugsplat-native/bindings/kotlin")
 include(":example")
- 
+project(":example").projectDir = file("bugsplat-native/samples/android/app")
