@@ -110,8 +110,8 @@ public class BugSplat {
     }
 
     // Reserved attribute names the BugSplat backend promotes to first-class report
-    // fields. Native crash reports reach the backend through Crashpad, which carries
-    // annotations and nothing else, so these four values ride along as attributes.
+    // fields. Native crash reports carry attributes and nothing else (Crashpad annotations,
+    // or the attributes of a tombstone report), so these four values ride along as attributes.
     private static final String ATTRIBUTE_USER = "BugSplatUser";
     private static final String ATTRIBUTE_EMAIL = "BugSplatEmail";
     private static final String ATTRIBUTE_NOTES = "BugSplatNotes";
@@ -228,6 +228,7 @@ public class BugSplat {
      * Attach a file to subsequent native crash reports.
      * This can be called at any time after {@link #init}, including with a path
      * that does not exist yet — the file is copied when the crash is captured.
+     * On Android 12+ that is on the next launch, when the crash is reported.
      * Missing files are skipped.
      *
      * <p>Adding a path that is already attached is a no-op.</p>
