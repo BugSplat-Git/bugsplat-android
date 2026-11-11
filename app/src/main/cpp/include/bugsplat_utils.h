@@ -20,12 +20,14 @@ using namespace std;
 void createAttributes(JNIEnv *env, jobject attributes_map);
 
 /**
- * Creates a vector of file paths from a Java String array
- * 
+ * Creates a vector of file paths from a Java String array.
+ * Paths are not required to exist at call time; Crashpad copies them
+ * when the crash is captured.
+ *
  * @param env JNI environment
  * @param attachments Java String array containing file paths
- * @return Vector of FilePath objects
+ * @return Vector of path strings
  */
-vector<FilePath> createAttachments(JNIEnv *env, jobjectArray attachments);
+vector<string> createAttachments(JNIEnv *env, jobjectArray attachments);
 
 #endif // BUGSPLAT_UTILS_H 

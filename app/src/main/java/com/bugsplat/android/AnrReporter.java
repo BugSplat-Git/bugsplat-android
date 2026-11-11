@@ -140,9 +140,15 @@ class AnrReporter {
                 byte[] zipped = ReportUploader.zip(
                         "anr_trace.txt",
                         threadDump.getBytes(StandardCharsets.UTF_8));
+                // ANRs are committed directly rather than through Crashpad, so the values
+                // set via BugSplat.setUser and friends are applied as typed fields here.
                 CommitOptions options = new CommitOptions()
                         .crashType(CRASH_TYPE)
-                        .crashTypeId(CRASH_TYPE_ID);
+                        .crashTypeId(CRASH_TYPE_ID)
+                        .user(BugSplat.getUser())
+                        .email(BugSplat.getEmail())
+                        .notes(BugSplat.getNotes())
+                        .appKey(BugSplat.getKey());
                 uploaded = uploader.upload(zipped, options);
             } catch (IOException e) {
                 Log.e(TAG, "Failed to upload ANR report", e);
