@@ -25,6 +25,37 @@ public class ReportUploaderTest {
     // ---- zip tests ----
 
     @Test
+    public void zip_skipsAttachmentsWithATakenName() throws IOException {
+        java.io.File dirA = java.nio.file.Files.createTempDirectory("a").toFile();
+        java.io.File dirB = java.nio.file.Files.createTempDirectory("b").toFile();
+        java.io.File log = new java.io.File(dirA, "log.txt");
+        java.io.File otherLog = new java.io.File(dirB, "log.txt");
+        java.io.File sameAsEntry = new java.io.File(dirB, "stack.jdmp");
+        for (java.io.File f : new java.io.File[]{log, otherLog, sameAsEntry}) {
+            java.nio.file.Files.write(f.toPath(), f.getPath().getBytes(StandardCharsets.UTF_8));
+        }
+
+        byte[] zipped = ReportUploader.zip("stack.jdmp", "trace".getBytes(StandardCharsets.UTF_8),
+                java.util.Arrays.asList(log, otherLog, sameAsEntry));
+
+        java.util.List<String> names = new java.util.ArrayList<>();
+        java.util.Map<String, String> contents = new java.util.HashMap<>();
+        ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipped));
+        for (ZipEntry e = zis.getNextEntry(); e != null; e = zis.getNextEntry()) {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buffer = new byte[1024];
+            for (int n; (n = zis.read(buffer)) != -1; ) {
+                baos.write(buffer, 0, n);
+            }
+            names.add(e.getName());
+            contents.put(e.getName(), baos.toString("UTF-8"));
+        }
+        assertEquals(java.util.Arrays.asList("stack.jdmp", "log.txt"), names);
+        assertEquals("trace", contents.get("stack.jdmp"));
+        assertEquals(log.getPath(), contents.get("log.txt"));
+    }
+
+    @Test
     public void zip_producesValidSingleEntryZip() throws IOException {
         String content = "hello world";
         byte[] zipped = ReportUploader.zip("test.txt", content.getBytes(StandardCharsets.UTF_8));

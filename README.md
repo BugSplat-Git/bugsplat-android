@@ -33,8 +33,9 @@ Starting November 1st, 2025, Google Play requires all new apps and updates targe
 
 To ensure your app is 16KB compatible:
 1. Use AGP 8.5.1 or higher
-2. Use `useLegacyPackaging false` in your `packagingOptions` (this enables proper 16KB zip alignment)
-3. If you have your own native code, ensure it's compiled with 16KB ELF alignment
+2. If you have your own native code, ensure it's compiled with 16KB ELF alignment
+
+Native libraries extracted at install (`useLegacyPackaging true`, see [Integration](#integration-%EF%B8%8F)) only need 16KB ELF alignment, which the BugSplat libraries have.
 
 ## Integration 🏗️
 
@@ -332,33 +333,28 @@ When integrating BugSplat into your Android application, it's crucial to ensure 
    }
    ```
 
-2. **Prevent Symbol Stripping**
+2. **Prevent Symbol Stripping and Extract Native Libraries**
    
-   Configure packaging options to prevent stripping debug symbols from native libraries:
+   Configure packaging options to keep debug symbols in native libraries and to extract them at install:
    ```gradle
    android {
        packagingOptions {
            jniLibs {
                keepDebugSymbols += ['**/*.so']
-               // Use uncompressed shared libraries with 16KB zip alignment (AGP 8.5.1+)
-               // Required for Android 15+ devices with 16KB page sizes
-               useLegacyPackaging false
+               // The Crashpad handler that reports native crashes on Android 8-11
+               // runs from the extracted libraries.
+               useLegacyPackaging true
            }
            doNotStrip '**/*.so'
        }
    }
    ```
    
-   > **Note:** Starting November 1st, 2025, all new apps and updates submitted to Google Play targeting Android 15+ must support [16 KB page sizes](https://developer.android.com/guide/practices/page-sizes). The BugSplat SDK is built with 16KB ELF alignment. Using `useLegacyPackaging false` with AGP 8.5.1+ ensures proper 16KB zip alignment for uncompressed shared libraries.
+   > **Note:** Starting November 1st, 2025, all new apps and updates submitted to Google Play targeting Android 15+ must support [16 KB page sizes](https://developer.android.com/guide/practices/page-sizes). Extracted native libraries need 16KB ELF alignment, which the BugSplat SDK is built with.
 
-3. **Enable Native Library Extraction**
+3. **Don't Set `extractNativeLibs` in the Manifest**
    
-   Add the following to your AndroidManifest.xml to ensure native libraries are extracted. The Crashpad handler that reports native crashes on Android 8–11 runs from the extracted libraries:
-   ```xml
-   <application
-       android:extractNativeLibs="true"
-       ... >
-   ```
+   `useLegacyPackaging true` replaces `android:extractNativeLibs="true"` in AndroidManifest.xml. AGP 9 fails the build when the manifest sets it, so remove it if you added it for an earlier version of this SDK.
 
 4. **Enable JNI Debugging (for development)**
    
@@ -400,6 +396,77 @@ When a native crash kills your app, Android writes a tombstone: the device's own
 ### Android 8–11 (API 26–30): Crashpad
 
 The SDK starts a Crashpad handler that writes a minidump and uploads it at crash time, with the attributes and attachments as they are at that moment.
+
+## Handled Exceptions 🪤
+
+Not every problem crashes the process. Use `BugSplat.postException` to report a caught `Throwable` as a non-fatal report. Non-fatals appear alongside crashes with the **"Android.Java"** type, so you can filter them separately on the dashboard.
+
+Reports carry the same metadata as a crash: the attributes and attachments passed to `init`, plus anything set with `BugSplat.setAttribute`. `BugSplat.init` must have been called first — a post before init is logged and dropped.
+
+### Reporting a caught exception
+
+**Java**
+```java
+try {
+    riskyOperation();
+} catch (Exception e) {
+    // Uploads on a background thread and returns immediately
+    BugSplat.postException(e);
+}
+```
+
+**Kotlin**
+```kotlin
+try {
+    riskyOperation()
+} catch (e: Exception) {
+    BugSplat.postException(e)
+}
+```
+
+### Per-report attributes
+
+Attributes passed to `postException` are layered over the attributes already registered with the SDK, so a per-report value wins over one with the same key from `init` or `setAttribute`:
+
+```java
+Map<String, String> attributes = new HashMap<>();
+attributes.put("screen", "checkout");
+attributes.put("retryCount", "2");
+
+BugSplat.postException(e, attributes);
+```
+
+### Blocking submission
+
+Use `postExceptionBlocking` when you need the result — for example in a background worker that should not exit until the report is uploaded. It returns `false` if the upload failed, the post was rate limited, or the SDK was not initialized. **Do not call it on the main thread.**
+
+```java
+boolean reported = BugSplat.postExceptionBlocking(e);
+```
+
+### Rate limiting
+
+A caught exception inside a render or game loop can fire every frame, so the SDK drops posts made within **3000ms** of the previous accepted one. Adjust the window, or disable the guard entirely with a value of zero or less:
+
+```java
+BugSplat.setExceptionPostIntervalMillis(10_000); // at most one report per 10s
+BugSplat.setExceptionPostIntervalMillis(0);      // report every exception
+```
+
+### Reporting uncaught exceptions
+
+Native crash reporting (Crashpad, or tombstones on Android 12+) only catches native signals, so a Java exception that reaches the top of the stack is not reported automatically. To capture those, install a default handler that posts the exception before delegating to the previous one:
+
+```java
+Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
+    // The process is about to die, so block until the report is uploaded
+    BugSplat.postExceptionBlocking(throwable);
+    if (previous != null) {
+        previous.uncaughtException(thread, throwable);
+    }
+});
+```
 
 ## ANR Detection 🐌
 

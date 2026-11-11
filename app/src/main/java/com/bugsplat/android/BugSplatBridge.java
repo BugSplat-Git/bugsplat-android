@@ -35,6 +35,10 @@ public class BugSplatBridge {
 
     public static void initBugSplat(Activity activity, String database, String application, String version,
             Map<String, String> attributes, String[] attachments) {
+        // Mirror the init parameters on the Java side — Crashpad owns this state
+        // natively, and postException needs to read it back to build a report.
+        BugSplatConfig.init(database, application, version, attributes, attachments);
+
         // Android 12+ reports native crashes from the system's tombstone on the next launch,
         // so Crashpad is not started there; a crash would otherwise be reported twice.
         if (TombstoneReporter.isSupported()) {
@@ -76,13 +80,14 @@ public class BugSplatBridge {
 
     public static void setAttribute(String key, String value) {
         validateAttributeKey(key);
+        if (value == null) {
+            removeAttribute(key);
+            return;
+        }
+        BugSplatConfig.setAttribute(key, value);
         CrashSession session = tombstoneSession;
         if (session != null) {
             session.setAttribute(key, value);
-            return;
-        }
-        if (value == null) {
-            jniRemoveAttribute(key);
             return;
         }
         jniSetAttribute(key, value);
@@ -90,6 +95,7 @@ public class BugSplatBridge {
 
     public static void removeAttribute(String key) {
         validateAttributeKey(key);
+        BugSplatConfig.removeAttribute(key);
         CrashSession session = tombstoneSession;
         if (session != null) {
             session.setAttribute(key, null);

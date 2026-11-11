@@ -5,15 +5,11 @@ import android.util.Log;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 /**
  * Posts User Feedback reports to BugSplat via the 3-part presigned-URL flow.
@@ -77,7 +73,7 @@ class FeedbackClient {
             }
             byte[] jsonBytes = json.toString().getBytes(StandardCharsets.UTF_8);
 
-            byte[] zipped = buildZip(jsonBytes, attachments);
+            byte[] zipped = ReportUploader.zip("feedback.json", jsonBytes, attachments);
 
             CommitOptions options = new CommitOptions()
                     .crashType(CRASH_TYPE)
@@ -101,40 +97,5 @@ class FeedbackClient {
             Log.e(TAG, "Failed to post feedback", e);
             return FeedbackResult.failure();
         }
-    }
-
-    /**
-     * Build the feedback zip: feedback.json first, then each attachment
-     * streamed directly from disk (not buffered fully in memory).
-     * Attachment filenames are used as-is for zip entry names — callers are
-     * responsible for ensuring they don't collide with each other or with
-     * {@code feedback.json}.
-     */
-    private static byte[] buildZip(byte[] feedbackJson, List<File> attachments) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
-            zos.putNextEntry(new ZipEntry("feedback.json"));
-            zos.write(feedbackJson);
-            zos.closeEntry();
-
-            if (attachments != null) {
-                byte[] buffer = new byte[8192];
-                for (File file : attachments) {
-                    if (file == null || !file.exists() || !file.isFile()) {
-                        Log.w(TAG, "Skipping invalid attachment: " + file);
-                        continue;
-                    }
-                    zos.putNextEntry(new ZipEntry(file.getName()));
-                    try (FileInputStream fis = new FileInputStream(file)) {
-                        int n;
-                        while ((n = fis.read(buffer)) != -1) {
-                            zos.write(buffer, 0, n);
-                        }
-                    }
-                    zos.closeEntry();
-                }
-            }
-        }
-        return baos.toByteArray();
     }
 }
