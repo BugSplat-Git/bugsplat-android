@@ -1,6 +1,7 @@
 package com.bugsplat.android;
 
 import android.app.ActivityManager;
+import android.app.Application;
 import android.app.ApplicationExitInfo;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -71,7 +72,17 @@ class TombstoneReporter {
     }
 
     void checkAndReport() {
-        if (!isSupported() || !scanned.compareAndSet(false, true)) {
+        if (!isSupported()) {
+            return;
+        }
+        // The exit history is package-wide, so only the main process reports it; two processes
+        // scanning it could upload the same crash twice. Other processes still save their
+        // sessions, and their crashes are reported by the main process.
+        if (!context.getPackageName().equals(Application.getProcessName())) {
+            Log.d(TAG, "Not the main process; tombstones are reported by the main process");
+            return;
+        }
+        if (!scanned.compareAndSet(false, true)) {
             return;
         }
 
@@ -107,6 +118,18 @@ class TombstoneReporter {
             return;
         }
 
+        // Taken before the history: a process that crashes during the scan is running in this
+        // snapshot or absent from the history, so its session is kept either way.
+        long scanStart = System.currentTimeMillis();
+        Set<Integer> keep = new HashSet<>();
+        keep.add(Process.myPid());
+        List<ActivityManager.RunningAppProcessInfo> running = am.getRunningAppProcesses();
+        if (running != null) {
+            for (ActivityManager.RunningAppProcessInfo process : running) {
+                keep.add(process.pid);
+            }
+        }
+
         List<ApplicationExitInfo> exitInfos = am.getHistoricalProcessExitReasons(
                 context.getPackageName(), 0, 0);
         if (exitInfos == null) {
@@ -126,7 +149,13 @@ class TombstoneReporter {
                 continue;
             }
 
-            byte[] tombstone = readTraceStream(exitInfo);
+            byte[] tombstone;
+            try {
+                tombstone = readTraceStream(exitInfo);
+            } catch (IOException e) {
+                Log.e(TAG, "Failed to read tombstone; retrying next launch", e);
+                break;
+            }
             if (tombstone == null || tombstone.length == 0) {
                 Log.w(TAG, "No tombstone for native crash at " + timestamp + ", skipping");
                 if (!markReported(prefs, timestamp)) {
@@ -170,20 +199,12 @@ class TombstoneReporter {
 
         // Keep the sessions of running processes and of crashes not reported yet. Every other
         // session belongs to a process that has exited and will never be reported.
-        Set<Integer> keep = new HashSet<>();
-        keep.add(Process.myPid());
-        List<ActivityManager.RunningAppProcessInfo> running = am.getRunningAppProcesses();
-        if (running != null) {
-            for (ActivityManager.RunningAppProcessInfo process : running) {
-                keep.add(process.pid);
-            }
-        }
         for (ApplicationExitInfo exitInfo : exitInfos) {
             if (isUnreported(exitInfo.getReason(), exitInfo.getTimestamp(), advanceTo)) {
                 keep.add(exitInfo.getPid());
             }
         }
-        deleteSessionsExcept(sessions, keep);
+        deleteSessionsExcept(sessions, keep, scanStart);
     }
 
     /**
@@ -200,8 +221,12 @@ class TombstoneReporter {
         return false;
     }
 
-    /** Deletes session files, and leftover temp files, of every PID not in {@code keep}. */
-    static void deleteSessionsExcept(File directory, Set<Integer> keep) {
+    /**
+     * Deletes session files, and leftover temp files, of every PID not in {@code keep}. Files
+     * written at or after {@code notBefore} belong to processes started during the scan and
+     * are kept.
+     */
+    static void deleteSessionsExcept(File directory, Set<Integer> keep, long notBefore) {
         File[] files = directory.listFiles();
         if (files == null) {
             return;
@@ -215,7 +240,7 @@ class TombstoneReporter {
             } catch (NumberFormatException e) {
                 continue;
             }
-            if (!keep.contains(pid)) {
+            if (!keep.contains(pid) && file.lastModified() < notBefore) {
                 file.delete();
             }
         }
@@ -259,7 +284,8 @@ class TombstoneReporter {
     }
 
     @RequiresApi(Build.VERSION_CODES.S)
-    private byte[] readTraceStream(ApplicationExitInfo exitInfo) {
+    /** Null when the system kept no tombstone; a read failure throws, so it is retried. */
+    private byte[] readTraceStream(ApplicationExitInfo exitInfo) throws IOException {
         try (InputStream is = exitInfo.getTraceInputStream()) {
             if (is == null) {
                 return null;
@@ -271,9 +297,6 @@ class TombstoneReporter {
                 baos.write(buffer, 0, bytesRead);
             }
             return baos.toByteArray();
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to read tombstone", e);
-            return null;
         }
     }
 }

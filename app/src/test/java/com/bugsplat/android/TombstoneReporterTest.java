@@ -49,13 +49,20 @@ public class TombstoneReporterTest {
         File exited = tmp.newFile("200.json");
         File leftoverTmp = tmp.newFile("300.json.tmp");
         File other = tmp.newFile("notes.txt");
+        File startedDuringScan = tmp.newFile("400.json");
+        long scanStart = System.currentTimeMillis() - 1000;
+        for (File f : new File[]{kept, exited, leftoverTmp, other}) {
+            assertTrue(f.setLastModified(scanStart - 60_000));
+        }
+        assertTrue(startedDuringScan.setLastModified(scanStart + 500));
 
-        TombstoneReporter.deleteSessionsExcept(dir, new HashSet<>(Arrays.asList(100)));
+        TombstoneReporter.deleteSessionsExcept(dir, new HashSet<>(Arrays.asList(100)), scanStart);
 
         assertTrue(kept.exists());
         assertFalse(exited.exists());
         assertFalse(leftoverTmp.exists());
         assertTrue(other.exists());
+        assertTrue(startedDuringScan.exists());
     }
 
     // ---- metadata selection ----
