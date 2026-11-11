@@ -24,7 +24,7 @@ The bugsplat-android library enables posting native crash reports to BugSplat fr
 
 - **Android Gradle Plugin (AGP)**: 8.5.1 or higher (for 16KB page size support)
 - **Android NDK**: r27 or higher recommended
-- **minSdkVersion**: 21 or higher
+- **minSdkVersion**: 26 or higher
 - **targetSdkVersion**: 35 or higher recommended
 
 ### 16KB Page Size Support
@@ -353,7 +353,7 @@ When integrating BugSplat into your Android application, it's crucial to ensure 
 
 3. **Enable Native Library Extraction**
    
-   Add the following to your AndroidManifest.xml to ensure native libraries are extracted:
+   Add the following to your AndroidManifest.xml to ensure native libraries are extracted. The Crashpad handler that reports native crashes on Android 8–11 runs from the extracted libraries:
    ```xml
    <application
        android:extractNativeLibs="true"

@@ -5,6 +5,8 @@ import android.app.ApplicationExitInfo;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
+import android.os.Process;
+import android.os.SystemClock;
 import android.util.Log;
 
 import androidx.annotation.RequiresApi;
@@ -21,6 +23,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -43,6 +46,10 @@ class TombstoneReporter {
     private static final int CRASH_TYPE_ID = 38;
     static final String TOMBSTONE_ENTRY = "tombstone.pb";
 
+    // The exit history does not change for this process, so a second init does not scan it
+    // again; two scans could read the same timestamp and upload a crash twice.
+    private static final AtomicBoolean scanned = new AtomicBoolean();
+
     private final Context context;
     private final CrashSession current;
     private final ExecutorService executor;
@@ -64,8 +71,19 @@ class TombstoneReporter {
     }
 
     void checkAndReport() {
-        if (!isSupported()) {
+        if (!isSupported() || !scanned.compareAndSet(false, true)) {
             return;
+        }
+
+        // First launch with tombstone reporting: native crashes of earlier processes were
+        // reported by Crashpad, or happened before BugSplat was added, so they are not
+        // reported. The start is this process's, and it is written before init returns, so
+        // a crash right after init is still newer than it.
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        if (!prefs.contains(PREF_LAST_REPORTED_TIMESTAMP)) {
+            long processStart = System.currentTimeMillis()
+                    - (SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime());
+            prefs.edit().putLong(PREF_LAST_REPORTED_TIMESTAMP, processStart).commit();
         }
 
         executor.execute(() -> {
@@ -81,12 +99,6 @@ class TombstoneReporter {
     @RequiresApi(Build.VERSION_CODES.S)
     private void checkAndReportInternal() {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        if (!prefs.contains(PREF_LAST_REPORTED_TIMESTAMP)) {
-            // First launch with tombstone reporting. Native crashes before now were reported
-            // by Crashpad, or happened before BugSplat was added, so they are not reported.
-            prefs.edit().putLong(PREF_LAST_REPORTED_TIMESTAMP, System.currentTimeMillis()).apply();
-            return;
-        }
         long lastReportedTimestamp = prefs.getLong(PREF_LAST_REPORTED_TIMESTAMP, 0);
 
         ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
@@ -97,8 +109,8 @@ class TombstoneReporter {
 
         List<ApplicationExitInfo> exitInfos = am.getHistoricalProcessExitReasons(
                 context.getPackageName(), 0, 0);
-        if (exitInfos == null || exitInfos.isEmpty()) {
-            return;
+        if (exitInfos == null) {
+            exitInfos = Collections.emptyList();
         }
 
         // Oldest first, stopping on the first failed upload, as in AnrReporter.
@@ -117,7 +129,7 @@ class TombstoneReporter {
             byte[] tombstone = readTraceStream(exitInfo);
             if (tombstone == null || tombstone.length == 0) {
                 Log.w(TAG, "No tombstone for native crash at " + timestamp + ", skipping");
-                advanceTo = Math.max(advanceTo, timestamp);
+                advanceTo = markReported(prefs, advanceTo, timestamp);
                 continue;
             }
 
@@ -147,20 +159,55 @@ class TombstoneReporter {
                 break; // retried next launch
             }
             Log.i(TAG, "Tombstone uploaded, crashId=" + result.crashId);
-            advanceTo = Math.max(advanceTo, timestamp);
+            advanceTo = markReported(prefs, advanceTo, timestamp);
         }
 
-        if (advanceTo > lastReportedTimestamp) {
-            prefs.edit().putLong(PREF_LAST_REPORTED_TIMESTAMP, advanceTo).apply();
+        // Keep the sessions of running processes and of crashes not reported yet. Every other
+        // session belongs to a process that has exited and will never be reported.
+        Set<Integer> keep = new HashSet<>();
+        keep.add(Process.myPid());
+        List<ActivityManager.RunningAppProcessInfo> running = am.getRunningAppProcesses();
+        if (running != null) {
+            for (ActivityManager.RunningAppProcessInfo process : running) {
+                keep.add(process.pid);
+            }
         }
-
-        // Sessions of exited processes are no longer needed, except for unreported crashes.
         for (ApplicationExitInfo exitInfo : exitInfos) {
             if (isUnreported(exitInfo.getReason(), exitInfo.getTimestamp(), advanceTo)) {
+                keep.add(exitInfo.getPid());
+            }
+        }
+        deleteSessionsExcept(sessions, keep);
+    }
+
+    /**
+     * Saved after each crash, not at the end of the pass, so a crash already uploaded is not
+     * uploaded again if the process dies during a later upload.
+     */
+    private static long markReported(SharedPreferences prefs, long lastReported, long timestamp) {
+        if (timestamp <= lastReported) {
+            return lastReported;
+        }
+        prefs.edit().putLong(PREF_LAST_REPORTED_TIMESTAMP, timestamp).commit();
+        return timestamp;
+    }
+
+    /** Deletes session files, and leftover temp files, of every PID not in {@code keep}. */
+    static void deleteSessionsExcept(File directory, Set<Integer> keep) {
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
+            String name = file.getName();
+            int dot = name.indexOf('.');
+            int pid;
+            try {
+                pid = Integer.parseInt(dot < 0 ? name : name.substring(0, dot));
+            } catch (NumberFormatException e) {
                 continue;
             }
-            File file = CrashSession.fileFor(sessions, exitInfo.getPid());
-            if (file.isFile() && file.lastModified() <= exitInfo.getTimestamp()) {
+            if (!keep.contains(pid)) {
                 file.delete();
             }
         }

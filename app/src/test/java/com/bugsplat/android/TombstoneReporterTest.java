@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -37,6 +38,24 @@ public class TombstoneReporterTest {
         assertFalse(TombstoneReporter.isUnreported(nativeCrash, 999, 1000));
         assertFalse(TombstoneReporter.isUnreported(ApplicationExitInfo.REASON_ANR, 1001, 1000));
         assertFalse(TombstoneReporter.isUnreported(ApplicationExitInfo.REASON_CRASH, 1001, 1000));
+    }
+
+    // ---- session cleanup ----
+
+    @Test
+    public void deleteSessionsExcept_keepsOnlyTheGivenPids() throws IOException {
+        File dir = tmp.getRoot();
+        File kept = tmp.newFile("100.json");
+        File exited = tmp.newFile("200.json");
+        File leftoverTmp = tmp.newFile("300.json.tmp");
+        File other = tmp.newFile("notes.txt");
+
+        TombstoneReporter.deleteSessionsExcept(dir, new HashSet<>(Arrays.asList(100)));
+
+        assertTrue(kept.exists());
+        assertFalse(exited.exists());
+        assertFalse(leftoverTmp.exists());
+        assertTrue(other.exists());
     }
 
     // ---- metadata selection ----
