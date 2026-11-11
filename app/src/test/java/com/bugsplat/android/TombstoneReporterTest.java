@@ -66,9 +66,12 @@ public class TombstoneReporterTest {
         Arrays.fill(source, (byte) 7);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
 
-        TombstoneReporter.copy(new ByteArrayInputStream(source), out, new byte[4096], 5_000);
-
+        assertEquals(5_000, TombstoneReporter.copy(new ByteArrayInputStream(source), out, new byte[4096], 5_000));
         assertEquals(5_000, out.size());
+
+        // A shorter stream than the limit copies what it has, and reports that count.
+        ByteArrayOutputStream all = new ByteArrayOutputStream();
+        assertEquals(10_000, TombstoneReporter.copy(new ByteArrayInputStream(source), all, new byte[4096], 1_000_000));
     }
 
     @Test

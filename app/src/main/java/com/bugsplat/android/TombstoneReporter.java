@@ -80,6 +80,18 @@ class TombstoneReporter {
         if (!isSupported()) {
             return;
         }
+
+        // First launch with tombstone reporting: native crashes of earlier processes were
+        // reported by Crashpad, or happened before BugSplat was added, so they are not
+        // reported. Set by whichever process initializes first, main or not, at that process's
+        // start and before init returns, so a crash in it right after init is still newer.
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        if (!prefs.contains(PREF_LAST_REPORTED_TIMESTAMP)) {
+            long processStart = System.currentTimeMillis()
+                    - (SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime());
+            prefs.edit().putLong(PREF_LAST_REPORTED_TIMESTAMP, processStart).commit();
+        }
+
         // The exit history is package-wide, so only the main process reports it; two processes
         // scanning it could upload the same crash twice. Other processes still save their
         // sessions, and their crashes are reported by the main process.
@@ -91,17 +103,6 @@ class TombstoneReporter {
         }
         if (!scanned.compareAndSet(false, true)) {
             return;
-        }
-
-        // First launch with tombstone reporting: native crashes of earlier processes were
-        // reported by Crashpad, or happened before BugSplat was added, so they are not
-        // reported. The start is this process's, and it is written before init returns, so
-        // a crash right after init is still newer than it.
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        if (!prefs.contains(PREF_LAST_REPORTED_TIMESTAMP)) {
-            long processStart = System.currentTimeMillis()
-                    - (SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime());
-            prefs.edit().putLong(PREF_LAST_REPORTED_TIMESTAMP, processStart).commit();
         }
 
         executor.execute(() -> {
@@ -312,33 +313,37 @@ class TombstoneReporter {
                 }
 
                 // Streamed, not read whole, and opened before the entry is started, so an
-                // unreadable file adds no entry.
+                // unreadable file adds no entry. A file that reports no length, such as
+                // /proc/self/status, is read up to what is left of the budget.
+                long limit = length > 0 ? length : maxAttachmentBytes - attachmentBytes;
+                long copied;
                 try (InputStream in = new FileInputStream(file)) {
                     zos.putNextEntry(new ZipEntry(file.getName()));
-                    copy(in, zos, buffer, length);
+                    copied = copy(in, zos, buffer, limit);
                     zos.closeEntry();
                 } catch (FileNotFoundException e) {
                     Log.w(TAG, "Could not read attachment " + path, e);
                     continue;
                 }
                 names.add(file.getName());
-                attachmentBytes += length;
+                attachmentBytes += copied;
             }
         }
         return baos.toByteArray();
     }
 
     /**
-     * Copies at most {@code limit} bytes: a log that grows after its length was checked
-     * against the attachment budget is cut at that length.
+     * Copies at most {@code limit} bytes and returns how many it copied: a log that grows after
+     * its length was checked against the attachment budget is cut at that length.
      */
-    static void copy(InputStream in, OutputStream out, byte[] buffer, long limit) throws IOException {
+    static long copy(InputStream in, OutputStream out, byte[] buffer, long limit) throws IOException {
         long remaining = limit;
         int n;
         while (remaining > 0 && (n = in.read(buffer, 0, (int) Math.min(buffer.length, remaining))) != -1) {
             out.write(buffer, 0, n);
             remaining -= n;
         }
+        return limit - remaining;
     }
 
     /** Null when the system kept no tombstone; a read failure throws, so it is retried. */
