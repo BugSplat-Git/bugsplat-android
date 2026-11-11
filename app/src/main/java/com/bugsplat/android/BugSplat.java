@@ -2,8 +2,10 @@ package com.bugsplat.android;
 
 import android.app.Activity;
 import android.content.Context;
+import android.os.SystemClock;
 import android.util.Log;
 import java.io.File;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -279,7 +281,13 @@ public class BugSplat {
      *                   the attributes already registered with the SDK, or null
      */
     public static void postException(Throwable throwable, Map<String, String> attributes) {
-        new Thread(() -> postExceptionInternal(throwable, attributes)).start();
+        // Checked here, so a dropped post doesn't start a thread.
+        if (!acceptExceptionPost(throwable)) {
+            return;
+        }
+        // Copied, so the caller can change its map while the upload runs.
+        Map<String, String> snapshot = attributes == null ? null : new HashMap<>(attributes);
+        new Thread(() -> uploadException(throwable, snapshot)).start();
     }
 
     /**
@@ -305,7 +313,7 @@ public class BugSplat {
      *         limited, or the SDK was not initialized
      */
     public static boolean postExceptionBlocking(Throwable throwable, Map<String, String> attributes) {
-        return postExceptionInternal(throwable, attributes);
+        return acceptExceptionPost(throwable) && uploadException(throwable, attributes);
     }
 
     /**
@@ -322,7 +330,7 @@ public class BugSplat {
         ExceptionReporter.setMinPostIntervalMillis(millis);
     }
 
-    private static boolean postExceptionInternal(Throwable throwable, Map<String, String> attributes) {
+    private static boolean acceptExceptionPost(Throwable throwable) {
         if (throwable == null) {
             Log.e("BugSplat", "postException called with a null throwable");
             return false;
@@ -331,11 +339,15 @@ public class BugSplat {
             Log.e("BugSplat", "postException called before init; report dropped");
             return false;
         }
-        if (!ExceptionReporter.shouldPost(System.currentTimeMillis())) {
+        // Monotonic, so a change to the device clock can't drop or allow posts.
+        if (!ExceptionReporter.shouldPost(SystemClock.elapsedRealtime())) {
             Log.w("BugSplat", "postException rate limited; report dropped");
             return false;
         }
+        return true;
+    }
 
+    private static boolean uploadException(Throwable throwable, Map<String, String> attributes) {
         ExceptionReporter reporter = new ExceptionReporter(
                 BugSplatConfig.database(), BugSplatConfig.application(), BugSplatConfig.version());
         return reporter.post(throwable, attributes, BugSplatConfig.attachmentFiles());

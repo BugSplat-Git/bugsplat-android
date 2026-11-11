@@ -16,7 +16,9 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -274,15 +276,15 @@ class ReportUploader {
     /**
      * Build a zip holding {@code data} as {@code entryName}, followed by each
      * attachment streamed directly from disk (not buffered fully in memory).
-     * Attachments that are null, missing, or not regular files are skipped.
-     *
-     * <p>Attachment filenames are used as-is for zip entry names — callers are
-     * responsible for ensuring they don't collide with each other or with
-     * {@code entryName}.</p>
+     * Attachments that are null, missing, or not regular files are skipped, as
+     * is an attachment whose filename is already taken by {@code entryName} or
+     * an earlier attachment: zip entry names must be unique.
      */
     static byte[] zip(String entryName, byte[] data, List<File> attachments)
             throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        Set<String> names = new HashSet<>();
+        names.add(entryName);
         try (ZipOutputStream zos = new ZipOutputStream(baos)) {
             zos.putNextEntry(new ZipEntry(entryName));
             zos.write(data);
@@ -293,6 +295,10 @@ class ReportUploader {
                 for (File file : attachments) {
                     if (file == null || !file.exists() || !file.isFile()) {
                         Log.w(TAG, "Skipping invalid attachment: " + file);
+                        continue;
+                    }
+                    if (!names.add(file.getName())) {
+                        Log.w(TAG, "Skipping attachment with a duplicate name: " + file);
                         continue;
                     }
                     zos.putNextEntry(new ZipEntry(file.getName()));
