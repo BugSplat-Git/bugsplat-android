@@ -33,8 +33,9 @@ Starting November 1st, 2025, Google Play requires all new apps and updates targe
 
 To ensure your app is 16KB compatible:
 1. Use AGP 8.5.1 or higher
-2. Use `useLegacyPackaging false` in your `packagingOptions` (this enables proper 16KB zip alignment)
-3. If you have your own native code, ensure it's compiled with 16KB ELF alignment
+2. If you have your own native code, ensure it's compiled with 16KB ELF alignment
+
+Native libraries extracted at install (`useLegacyPackaging true`, see [Integration](#integration-%EF%B8%8F)) only need 16KB ELF alignment, which the BugSplat libraries have.
 
 ## Integration 🏗️
 
@@ -331,33 +332,28 @@ When integrating BugSplat into your Android application, it's crucial to ensure 
    }
    ```
 
-2. **Prevent Symbol Stripping**
+2. **Prevent Symbol Stripping and Extract Native Libraries**
    
-   Configure packaging options to prevent stripping debug symbols from native libraries:
+   Configure packaging options to keep debug symbols in native libraries and to extract them at install:
    ```gradle
    android {
        packagingOptions {
            jniLibs {
                keepDebugSymbols += ['**/*.so']
-               // Use uncompressed shared libraries with 16KB zip alignment (AGP 8.5.1+)
-               // Required for Android 15+ devices with 16KB page sizes
-               useLegacyPackaging false
+               // The Crashpad handler that reports native crashes on Android 8-11
+               // runs from the extracted libraries.
+               useLegacyPackaging true
            }
            doNotStrip '**/*.so'
        }
    }
    ```
    
-   > **Note:** Starting November 1st, 2025, all new apps and updates submitted to Google Play targeting Android 15+ must support [16 KB page sizes](https://developer.android.com/guide/practices/page-sizes). The BugSplat SDK is built with 16KB ELF alignment. Using `useLegacyPackaging false` with AGP 8.5.1+ ensures proper 16KB zip alignment for uncompressed shared libraries.
+   > **Note:** Starting November 1st, 2025, all new apps and updates submitted to Google Play targeting Android 15+ must support [16 KB page sizes](https://developer.android.com/guide/practices/page-sizes). Extracted native libraries need 16KB ELF alignment, which the BugSplat SDK is built with.
 
-3. **Enable Native Library Extraction**
+3. **Don't Set `extractNativeLibs` in the Manifest**
    
-   Add the following to your AndroidManifest.xml to ensure native libraries are extracted:
-   ```xml
-   <application
-       android:extractNativeLibs="true"
-       ... >
-   ```
+   `useLegacyPackaging true` replaces `android:extractNativeLibs="true"` in AndroidManifest.xml. AGP 9 fails the build when the manifest sets it, so remove it if you added it for an earlier version of this SDK.
 
 4. **Enable JNI Debugging (for development)**
    

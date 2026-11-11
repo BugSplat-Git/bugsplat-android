@@ -94,13 +94,13 @@ android {
         }
     }
 
-    // Ensure native libraries are not stripped
-    // Use uncompressed shared libraries with 16KB zip alignment (AGP 8.5.1+)
-    // See: https://developer.android.com/guide/practices/page-sizes
+    // Ensure native libraries are not stripped, and extract them at install: the Crashpad
+    // handler that reports native crashes on Android 8-11 runs from the extracted libraries.
+    // AGP 9 rejects android:extractNativeLibs in the manifest; this is its replacement.
     packagingOptions {
         jniLibs {
             keepDebugSymbols += ['**/*.so']
-            useLegacyPackaging false
+            useLegacyPackaging true
         }
         doNotStrip '**/*.so'
     }

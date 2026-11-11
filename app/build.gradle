@@ -77,8 +77,16 @@ android {
 }
 
 mavenPublishing {
-    publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)
+    // The Central Portal is the only host the plugin publishes to now, so the
+    // SonatypeHost argument this used to take no longer exists.
+    publishToMavenCentral()
     signAllPublications()
+
+    // AGP 9 no longer exposes a publishable component implicitly; the plugin
+    // declares the variant itself when told which one to publish. Called on the
+    // extension explicitly because a bare configure() in a Groovy build script
+    // resolves to Project.configure instead.
+    delegate.configure(new com.vanniktech.maven.publish.AndroidSingleVariantLibrary('release', true, true))
 
     coordinates("com.bugsplat", "bugsplat-android", "1.4.0")
 
@@ -123,15 +131,17 @@ dependencies {
     androidTestImplementation libs.androidx.espresso.core
 }
 
-afterEvaluate {
-    android.libraryVariants.all { variant ->
-        def bundleTask = tasks.named("bundle${variant.name.capitalize()}Aar")
-        bundleTask.configure {
-            def aarOutputDir = file("${buildDir}/outputs/aar")
-            def originalAarName = "app-${variant.name}.aar"
-            def newAarName = "bugsplat-android-${variant.name}.aar"
-            def originalFile = file("$aarOutputDir/$originalAarName")
-            def newFile = file("$aarOutputDir/$newAarName")
+// AGP 9 removed android.libraryVariants; onVariants is the replacement, and it
+// runs early enough that the afterEvaluate wrapper is no longer needed.
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def variantName = variant.name
+        // AGP 9 only creates a bundle task for variants it can package, so match
+        // rather than name it directly.
+        tasks.matching { it.name == "bundle${variantName.capitalize()}Aar" }.configureEach {
+            def aarOutputDir = layout.buildDirectory.dir("outputs/aar").get().asFile
+            def originalFile = new File(aarOutputDir, "app-${variantName}.aar")
+            def newFile = new File(aarOutputDir, "bugsplat-android-${variantName}.aar")
 
             doLast {
                 if (originalFile.exists()) {
