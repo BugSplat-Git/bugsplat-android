@@ -393,7 +393,7 @@ When a native crash kills your app, Android writes a tombstone: the device's own
 
 - **Delivery is on the next launch.** A crash is not sent until the user opens the app again.
 - **Report metadata comes from the session that crashed.** The application, version, attributes, user, email, notes, and key in effect when the app crashed are saved to a small file in the app's `no_backup` directory whenever they change, and used for that crash's report.
-- **Attachments are read at the next launch**, when the report is sent, not at crash time. A file that changed after the crash is sent as it is then; a file that no longer exists is skipped.
+- **Attachments are read at the next launch**, when the report is sent, not at crash time. A file that changed after the crash is sent as it is then; a file that no longer exists is skipped. Attachments past 20 MB in total are skipped.
 - **Crashes are reported by your app's main process**, so call `BugSplat.init()` there. Other processes that call it still save their session, and their crashes are reported by the main process on its next launch.
 - Crashpad is not started on these versions, so each crash is reported once. The SDK keeps the timestamp of the last reported crash in `SharedPreferences` to avoid duplicate uploads. Native crashes from before the first launch with tombstone reporting are not reported.
 
