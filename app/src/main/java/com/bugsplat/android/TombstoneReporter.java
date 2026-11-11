@@ -129,7 +129,10 @@ class TombstoneReporter {
             byte[] tombstone = readTraceStream(exitInfo);
             if (tombstone == null || tombstone.length == 0) {
                 Log.w(TAG, "No tombstone for native crash at " + timestamp + ", skipping");
-                advanceTo = markReported(prefs, advanceTo, timestamp);
+                if (!markReported(prefs, timestamp)) {
+                    break;
+                }
+                advanceTo = Math.max(advanceTo, timestamp);
                 continue;
             }
 
@@ -159,7 +162,10 @@ class TombstoneReporter {
                 break; // retried next launch
             }
             Log.i(TAG, "Tombstone uploaded, crashId=" + result.crashId);
-            advanceTo = markReported(prefs, advanceTo, timestamp);
+            if (!markReported(prefs, timestamp)) {
+                break; // reported again next launch, so its session is kept
+            }
+            advanceTo = Math.max(advanceTo, timestamp);
         }
 
         // Keep the sessions of running processes and of crashes not reported yet. Every other
@@ -182,14 +188,16 @@ class TombstoneReporter {
 
     /**
      * Saved after each crash, not at the end of the pass, so a crash already uploaded is not
-     * uploaded again if the process dies during a later upload.
+     * uploaded again if the process dies during a later upload. Crashes are visited oldest
+     * first, so the timestamp only grows. False when it could not be saved: the pass stops,
+     * since every later upload would be repeated on the next launch.
      */
-    private static long markReported(SharedPreferences prefs, long lastReported, long timestamp) {
-        if (timestamp <= lastReported) {
-            return lastReported;
+    private static boolean markReported(SharedPreferences prefs, long timestamp) {
+        if (prefs.edit().putLong(PREF_LAST_REPORTED_TIMESTAMP, timestamp).commit()) {
+            return true;
         }
-        prefs.edit().putLong(PREF_LAST_REPORTED_TIMESTAMP, timestamp).commit();
-        return timestamp;
+        Log.e(TAG, "Could not save the last reported timestamp; stopping until next launch");
+        return false;
     }
 
     /** Deletes session files, and leftover temp files, of every PID not in {@code keep}. */
