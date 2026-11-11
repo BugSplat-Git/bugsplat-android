@@ -47,7 +47,7 @@ Add the BugSplat dependency to your app's `build.gradle` file:
 
 ```gradle
 dependencies {
-    implementation 'com.bugsplat:bugsplat-android:1.3.0'
+    implementation 'com.bugsplat:bugsplat-android:1.5.0'
 }
 ```
 

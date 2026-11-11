@@ -88,7 +88,7 @@ mavenPublishing {
     // resolves to Project.configure instead.
     delegate.configure(new com.vanniktech.maven.publish.AndroidSingleVariantLibrary('release', true, true))
 
-    coordinates("com.bugsplat", "bugsplat-android", "1.4.0")
+    coordinates("com.bugsplat", "bugsplat-android", "1.5.0")
 
     pom {
         name = "BugSplat Android"
