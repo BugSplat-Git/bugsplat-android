@@ -24,7 +24,7 @@ The bugsplat-android library enables posting native crash reports to BugSplat fr
 
 - **Android Gradle Plugin (AGP)**: 8.5.1 or higher (for 16KB page size support)
 - **Android NDK**: r27 or higher recommended
-- **minSdkVersion**: 21 or higher
+- **minSdkVersion**: 26 or higher
 - **targetSdkVersion**: 35 or higher recommended
 
 ### 16KB Page Size Support
@@ -182,7 +182,8 @@ BugSplat.init(
 )
 
 // Attachments can also be added or removed after init. Paths are copied when
-// a crash is captured, so the file does not need to exist yet.
+// a crash is reported, so the file does not need to exist yet. On Android 12+
+// that is the next launch (see Native Crash Reporting).
 BugSplat.addAttachment(attachmentPath)
 BugSplat.removeAttachment(attachmentPath)
 ```
@@ -378,6 +379,24 @@ When integrating BugSplat into your Android application, it's crucial to ensure 
 
 These configurations ensure that the BugSplat native libraries are properly included in your app and can function correctly to capture and report native crashes.
 
+## Native Crash Reporting 💥
+
+How native crashes are captured depends on the Android version. Both are enabled by `BugSplat.init()`.
+
+### Android 12+ (API 31+): tombstones, reported on the next launch
+
+When a native crash kills your app, Android writes a tombstone: the device's own unwind of every thread, with the signal, fault address, registers, and memory maps. On the next app launch, the SDK reads it with [`ApplicationExitInfo.getTraceInputStream()`](https://developer.android.com/reference/android/app/ApplicationExitInfo#getTraceInputStream()) and uploads it to BugSplat. These reports appear with the **"Android.Tombstone"** type.
+
+- **Delivery is on the next launch.** A crash is not sent until the user opens the app again.
+- **Report metadata comes from the session that crashed.** The application, version, attributes, user, email, notes, and key in effect when the app crashed are saved to a small file in the app's `no_backup` directory whenever they change, and used for that crash's report.
+- **Attachments are read at the next launch**, when the report is sent, not at crash time. A file that changed after the crash is sent as it is then; a file that no longer exists is skipped. Attachments past 20 MB in total are skipped.
+- **Crashes are reported by your app's main process**, so call `BugSplat.init()` there. Other processes that call it still save their session, and their crashes are reported by the main process on its next launch.
+- Crashpad is not started on these versions, so each crash is reported once. The SDK keeps the timestamp of the last reported crash in `SharedPreferences` to avoid duplicate uploads. Native crashes from before the first launch with tombstone reporting are not reported.
+
+### Android 8–11 (API 26–30): Crashpad
+
+The SDK starts a Crashpad handler that writes a minidump and uploads it at crash time, with the attributes and attachments as they are at that moment.
+
 ## Handled Exceptions 🪤
 
 Not every problem crashes the process. Use `BugSplat.postException` to report a caught `Throwable` as a non-fatal report. Non-fatals appear alongside crashes with the **"Android.Java"** type, so you can filter them separately on the dashboard.
@@ -436,7 +455,7 @@ BugSplat.setExceptionPostIntervalMillis(0);      // report every exception
 
 ### Reporting uncaught exceptions
 
-Crashpad only catches native signals, so a Java exception that reaches the top of the stack is not reported automatically. To capture those, install a default handler that posts the exception before delegating to the previous one:
+Native crash reporting (Crashpad, or tombstones on Android 12+) only catches native signals, so a Java exception that reaches the top of the stack is not reported automatically. To capture those, install a default handler that posts the exception before delegating to the previous one:
 
 ```java
 Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();

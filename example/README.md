@@ -34,7 +34,7 @@ You can also build and install the example app using Gradle:
 
 The example app automatically initializes BugSplat when it starts. You can:
 
-1. Press the "Crash App" button to trigger a crash and test the crash reporting functionality
+1. Press the "Crash App" button to trigger a crash and test the crash reporting functionality. On Android 12+, reopen the app afterwards: the crash is reported on the next launch
 2. Navigate the to [BugSplat Dashboard](https://app.bugsplat.com/v2/dashboard) to view your crash reports
 
 ## Configuration
