@@ -61,6 +61,17 @@ public class TombstoneReporterTest {
     // ---- attachments ----
 
     @Test
+    public void copy_stopsAtTheLimit() throws IOException {
+        byte[] source = new byte[10_000];
+        Arrays.fill(source, (byte) 7);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        TombstoneReporter.copy(new ByteArrayInputStream(source), out, new byte[4096], 5_000);
+
+        assertEquals(5_000, out.size());
+    }
+
+    @Test
     public void zip_skipsAttachmentsPastTheSizeLimit() throws IOException {
         File small = tmp.newFile("small.txt");
         Files.write(small.toPath(), new byte[100]);

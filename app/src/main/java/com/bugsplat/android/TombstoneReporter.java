@@ -18,6 +18,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -314,10 +315,7 @@ class TombstoneReporter {
                 // unreadable file adds no entry.
                 try (InputStream in = new FileInputStream(file)) {
                     zos.putNextEntry(new ZipEntry(file.getName()));
-                    int n;
-                    while ((n = in.read(buffer)) != -1) {
-                        zos.write(buffer, 0, n);
-                    }
+                    copy(in, zos, buffer, length);
                     zos.closeEntry();
                 } catch (FileNotFoundException e) {
                     Log.w(TAG, "Could not read attachment " + path, e);
@@ -330,8 +328,21 @@ class TombstoneReporter {
         return baos.toByteArray();
     }
 
-    @RequiresApi(Build.VERSION_CODES.S)
+    /**
+     * Copies at most {@code limit} bytes: a log that grows after its length was checked
+     * against the attachment budget is cut at that length.
+     */
+    static void copy(InputStream in, OutputStream out, byte[] buffer, long limit) throws IOException {
+        long remaining = limit;
+        int n;
+        while (remaining > 0 && (n = in.read(buffer, 0, (int) Math.min(buffer.length, remaining))) != -1) {
+            out.write(buffer, 0, n);
+            remaining -= n;
+        }
+    }
+
     /** Null when the system kept no tombstone; a read failure throws, so it is retried. */
+    @RequiresApi(Build.VERSION_CODES.S)
     private byte[] readTraceStream(ApplicationExitInfo exitInfo) throws IOException {
         try (InputStream is = exitInfo.getTraceInputStream()) {
             if (is == null) {
