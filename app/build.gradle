@@ -15,6 +15,11 @@ android {
     defaultConfig {
         minSdk 26
         targetSdk 35
+        aarMetadata {
+            // AGP 9 defaults this to compileSdk, which would force consumers to compile
+            // against SDK 35+. The library only needs the minSdk APIs to compile against.
+            minCompileSdk 26
+        }
         ndk {
             abiFilters 'arm64-v8a', 'x86_64', 'armeabi-v7a'
         }
@@ -88,7 +93,7 @@ mavenPublishing {
     // resolves to Project.configure instead.
     delegate.configure(new com.vanniktech.maven.publish.AndroidSingleVariantLibrary('release', true, true))
 
-    coordinates("com.bugsplat", "bugsplat-android", "1.5.0")
+    coordinates("com.bugsplat", "bugsplat-android", "1.5.1")
 
     pom {
         name = "BugSplat Android"
