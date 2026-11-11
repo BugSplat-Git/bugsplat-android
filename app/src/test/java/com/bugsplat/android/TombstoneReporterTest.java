@@ -40,6 +40,47 @@ public class TombstoneReporterTest {
         assertFalse(TombstoneReporter.isUnreported(ApplicationExitInfo.REASON_CRASH, 1001, 1000));
     }
 
+    @Test
+    public void reportedThrough_holdsBackATimestampSharedWithALaterCrash() {
+        int nativeCrash = ApplicationExitInfo.REASON_CRASH_NATIVE;
+        int anr = ApplicationExitInfo.REASON_ANR;
+        long[] timestamps = {1000, 2000, 2000, 3000};
+        int[] reasons = {nativeCrash, nativeCrash, nativeCrash, anr};
+
+        assertEquals(1000, TombstoneReporter.reportedThrough(timestamps, reasons, 0, 500));
+        // The crash at index 2 has the same timestamp and is not done yet.
+        assertEquals(1999, TombstoneReporter.reportedThrough(timestamps, reasons, 1, 500));
+        assertEquals(2000, TombstoneReporter.reportedThrough(timestamps, reasons, 2, 500));
+
+        // A non-crash record with the same timestamp does not hold it back.
+        long[] withAnr = {2000, 2000};
+        int[] anrReasons = {nativeCrash, anr};
+        assertEquals(2000, TombstoneReporter.reportedThrough(withAnr, anrReasons, 0, 500));
+    }
+
+    // ---- attachments ----
+
+    @Test
+    public void zip_skipsAttachmentsPastTheSizeLimit() throws IOException {
+        File small = tmp.newFile("small.txt");
+        Files.write(small.toPath(), new byte[100]);
+        File large = tmp.newFile("large.txt");
+        Files.write(large.toPath(), new byte[300]);
+        File fits = tmp.newFile("fits.txt");
+        Files.write(fits.toPath(), new byte[150]);
+
+        byte[] zipped = TombstoneReporter.zip(new byte[]{1, 2, 3},
+                Arrays.asList(small.getPath(), large.getPath(), fits.getPath()), 256);
+
+        ArrayList<String> names = new ArrayList<>();
+        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipped))) {
+            for (ZipEntry e = zis.getNextEntry(); e != null; e = zis.getNextEntry()) {
+                names.add(e.getName());
+            }
+        }
+        assertEquals(Arrays.asList(TombstoneReporter.TOMBSTONE_ENTRY, "small.txt", "fits.txt"), names);
+    }
+
     // ---- session cleanup ----
 
     @Test

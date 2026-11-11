@@ -157,7 +157,9 @@ final class CrashSession {
             json.put("attachments", new JSONArray(attachments));
 
             File directory = file.getParentFile();
-            if (directory != null && !directory.isDirectory() && !directory.mkdirs()) {
+            // Another process may create it between the check and mkdirs(), so check again.
+            if (directory != null && !directory.isDirectory() && !directory.mkdirs()
+                    && !directory.isDirectory()) {
                 throw new IOException("Could not create " + directory);
             }
 
